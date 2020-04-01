@@ -10,7 +10,6 @@ import subprocess
 import time
 import zipfile
 import tempfile
-import dicom as dicomLib
 from shutil import copy as fileCopy
 from shutil import rmtree
 from shutil import copytree
@@ -576,26 +575,7 @@ if 'bidsconvert' in proc_steps:
             # Download any one DICOM from the series and check its headers
             # If the headers indicate it is a secondary capture, we will skip this series.
             dicomFileList = dicomFileDict.items()
-        
-            # commenting out code for checking modality
-            #(name, pathDict) = dicomFileList[0]
-            #download(name, pathDict)
-        
-            #not sure what this code actually achieves - the continue keyword doesn't seem to make any difference
-            #if usingDicom:
-            #    print ('Checking modality in DICOM headers of file %s.' % name)
-            #    d = dicomLib.read_file(name)
-            #    modalityHeader = d.get((0x0008, 0x0060), None)
-            #    if modalityHeader:
-            #        print ('Modality header: %s' % modalityHeader)
-            #        modality = modalityHeader.value.strip("'").strip('"')
-            #        if modality == 'SC' or modality == 'SR':
-            #            print ('Scan %s is a secondary capture. Skipping.' % scanid)
-            #            continue
-            #    else:
-            #        print ('Could not read modality from DICOM headers. Skipping.')
-            #        continue
-        
+              
             ##########
             # Download remaining DICOMs
             for name, pathDict in dicomFileList:
