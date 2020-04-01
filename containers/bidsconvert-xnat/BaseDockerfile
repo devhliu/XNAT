@@ -46,8 +46,8 @@ RUN cd /usr/local/src/Dcm2Bids && \
 RUN cd /usr/local/src/Dcm2Bids && sed -i 's/datetime.now().isoformat()/(datetime.now() - datetime(1970,1,1)).total_seconds()/g' ./dcm2bids/dcm2bids.py    
 RUN cd /usr/local/src/Dcm2Bids && pip install .
 
-RUN pip install pybids=0.10.2\
-                requests=2.23.0
+RUN pip install pybids==0.10.2\
+                requests==2.23.0
 
 WORKDIR /src
 COPY ./bidsconvert-xnat.py /src

@@ -26,9 +26,3 @@ echo -e ']"\n' >> ${WORKDIR}/Dockerfile
 docker build -t  aacazxnat/bidsconvert-xnat:${IMVER} --build-arg BUILD_DATE=${BUILD_DATE} --build-arg VERSION=${IMVER} --build-arg DCM2BIDSVER=${DCM2BIDSVER} .
 
 docker push  aacazxnat/bidsconvert-xnat:${IMVER}
-
-git tag -d v${IMVER}
-git push origin --delete v${IMVER}
-git tag v${IMVER}
-git push origin v${IMVER}
-
