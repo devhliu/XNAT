@@ -1,0 +1,226 @@
+{
+    "descriptions": [
+        {
+        "dataType": "func",
+        "modalityLabel": "bold",
+        "customLabels": "task-rest",
+        "criteria": {
+            "SeriesDescription": "RS-FMRI-MB*"
+            }
+        },
+        {
+        "dataType": "func",
+        "modalityLabel": "bold",
+        "customLabels": "task-rest_rec-moco",
+        "criteria": {
+            "SeriesDescription": "MoCoSeries*"
+            }
+        },
+        {
+        "dataType": "anat",
+        "modalityLabel": "T1w",
+        "criteria": {
+            "SeriesDescription": "T1-MPRAGE"
+            }
+        },
+        {
+        "dataType": "anat",
+        "modalityLabel": "T1w",
+        "customLabels": "acq-distcorr",
+        "criteria": {
+            "SeriesDescription": "T1-MPRAGE_ND"
+            }
+        },
+        {
+        "dataType": "anat",
+        "modalityLabel": "T1w",
+        "customLabels": "acq-petra",
+        "criteria": {
+            "SeriesDescription": "petra"
+            }
+        },
+        {
+        "dataType": "anat",
+        "modalityLabel": "T2w",
+        "criteria": {
+            "SeriesDescription": "pd+t2_tse_tra_3mm"
+            }
+        },
+        {
+        "dataType": "anat",
+        "modalityLabel": "FLAIR",
+        "criteria": {
+            "SeriesDescription": "T2_FLAIR"
+            }
+        },
+        {
+        "dataType": "anat",
+        "modalityLabel": "angio",
+        "criteria": {
+            "SeriesDescription": "TOF_3D_multi-slab"
+            }
+        },
+        {
+        "dataType": "anat",
+        "modalityLabel": "angio",
+        "customLabels": "rec-mip_acq-cor",
+        "criteria": {
+            "SeriesDescription": "TOF_3D_multi-slab_MIP_COR"
+            }
+        },
+        {
+        "dataType": "anat",
+        "modalityLabel": "angio",
+        "customLabels": "rec-mip_acq-tra",
+        "criteria": {
+            "SeriesDescription": "TOF_3D_multi-slab_MIP_TRA"
+            }
+        },
+        {
+        "dataType": "anat",
+        "modalityLabel": "angio",
+        "customLabels": "rec-mip_acq-sag",
+        "criteria": {
+            "SeriesDescription": "TOF_3D_multi-slab_MIP_SAG"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "dwi",
+        "criteria": {
+            "SeriesDescription": "DMRI-3Shell-MB"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "rpe",
+        "criteria": {
+            "SeriesDescription": "DMRI-3Shell-MB-RPE"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "dwi",
+        "criteria": {
+            "SeriesDescription": "DTI_MB_3SHELL"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "rpe",
+        "criteria": {
+            "SeriesDescription": "DTI_MB_3SHELL_RPE"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "fa",
+        "criteria": {
+            "SeriesDescription": "DTI_MB_3SHELL_FA"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "trace",
+        "criteria": {
+            "SeriesDescription": "DTI_MB_3SHELL_TRACEW"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "adc",
+        "criteria": {
+            "SeriesDescription": "DTI_MB_3SHELL_ADC"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "colFA",
+        "criteria": {
+            "SeriesDescription": "DTI_MB_3SHELL_ColFA"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "dwi",
+        "criteria": {
+            "SeriesDescription": "ep2d_diff_mddw_20_p2"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "rpe",
+        "criteria": {
+            "SeriesDescription": "ep2d_diff_mddw_RPE"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "fa",
+        "criteria": {
+            "SeriesDescription": "ep2d_diff_mddw_20_p2_FA"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "trace",
+        "criteria": {
+            "SeriesDescription": "ep2d_diff_mddw_20_p2_TRACEW"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "adc",
+        "criteria": {
+            "SeriesDescription": "ep2d_diff_mddw_20_p2_ADC"
+            }
+        },
+		{
+        "dataType": "dwi",
+        "modalityLabel": "colFA",
+        "criteria": {
+            "SeriesDescription": "ep2d_diff_mddw_20_p2_ColFA"
+            }
+        },
+        {
+		"dataType": "asl",
+        "modalityLabel": "asl",
+        "criteria": {
+            "SeriesDescription": "JJWANGS*"
+            }
+        },
+        {
+		"dataType": "asl",
+        "modalityLabel": "asl",
+        "customLabels": "acq-jjwang",
+        "criteria": {
+            "SeriesDescription": "3D-ASL"
+            }
+        },
+		{
+		"dataType": "asl",
+        "modalityLabel": "asl",
+		"customLabels": "acq-perfusion",
+        "criteria": {
+            "SeriesDescription": "Perfusion_Weighted"
+            }
+        },
+		{
+		"dataType": "asl",
+        "modalityLabel": "asl",
+		"customLabels": "acq-pcasl",
+        "criteria": {
+            "SeriesDescription": "pCASL_PLD1800"
+            }
+        },
+		{
+		"dataType": "asl",
+        "modalityLabel": "asl",
+		"customLabels": "acq-siemens",
+        "criteria": {
+            "SeriesDescription": "AX_3DASL"
+            }
+        }
+		
+    ]
+}

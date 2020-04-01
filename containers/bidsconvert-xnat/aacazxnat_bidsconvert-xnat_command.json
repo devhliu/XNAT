@@ -1,0 +1,111 @@
+{
+  "name": "aacazxnat_bidsconvert-xnat",
+  "description": "Run DICOM to BIDS conversion using dcm2bids. Upload BIDS files at session level.",
+  "version": "0.1",
+  "schema-version": "1.0",
+  "image": "aacazxnat/bidsconvert-xnat:0.1",
+  "type": "docker",
+  "command-line": "python bidsconvert-xnat.py #SESSION_ID# #OVERWRITE# #SESSION_LABEL# --host $XNAT_HOST --user $XNAT_USER --pass $XNAT_PASS --upload-by-ref False --dicomdir /dicom --niftidir /nifti",
+  "override-entrypoint": true,
+  "mounts": [
+    {
+      "name": "nifti",
+      "writable": true,
+      "path": "/nifti"
+    }
+  ],
+  "environment-variables": {},
+  "ports": {},
+  "inputs": [
+    {
+      "name": "session_id",
+      "description": "XNAT ID of the session",
+      "type": "string",
+      "matcher": null,
+      "default-value": null,
+      "required": true,
+      "replacement-key": "#SESSION_ID#",
+      "sensitive": null,
+      "command-line-flag": "--session",
+      "command-line-separator": null,
+      "true-value": null,
+      "false-value": null
+    },
+    {
+      "name": "overwrite",
+      "description": "Overwrite any existing NIFTI and BIDS scan resources?",
+      "type": "boolean",
+      "matcher": null,
+      "default-value": "true",
+      "required": false,
+      "replacement-key": "#OVERWRITE#",
+      "sensitive": null,
+      "command-line-flag": "--overwrite",
+      "command-line-separator": null,
+      "true-value": "True",
+      "false-value": "False"
+    },
+    {
+      "name": "session_label",
+      "description": "session label to use instead of default",
+      "type": "string",
+      "matcher": null,
+      "default-value": null,
+      "required": false,
+      "replacement-key": "#SESSION_LABEL#",
+      "sensitive": null,
+      "command-line-flag": "--session_label",
+      "command-line-separator": null,
+      "true-value": null,
+      "false-value": null
+    }
+  ],
+  "outputs": [],
+  "xnat": [
+    {
+      "name": "aacazxnat_bidsconvert-xnat",
+      "label": null,
+      "description": "Run DICOM to BIDS conversion at session-level using aacazxnat/bidsconvert-xnat:0.1",
+      "contexts": [
+        "xnat:imageSessionData"
+      ],
+      "external-inputs": [
+        {
+          "name": "session",
+          "description": "Input session",
+          "type": "Session",
+          "matcher": null,
+          "default-value": null,
+          "required": true,
+          "replacement-key": null,
+          "sensitive": null,
+          "provides-value-for-command-input": null,
+          "provides-files-for-command-mount": null,
+          "via-setup-command": null,
+          "user-settable": null,
+          "load-children": true
+        }
+      ],
+      "derived-inputs": [
+        {
+          "name": "session-id",
+          "description": "The session's id",
+          "type": "string",
+          "matcher": null,
+          "default-value": null,
+          "required": true,
+          "replacement-key": null,
+          "sensitive": null,
+          "provides-value-for-command-input": "session_id",
+          "provides-files-for-command-mount": null,
+          "user-settable": null,
+          "load-children": true,
+          "derived-from-wrapper-input": "session",
+          "derived-from-xnat-object-property": "id",
+          "via-setup-command": null
+        }
+      ],
+      "output-handlers": []
+    }
+  ]
+}
