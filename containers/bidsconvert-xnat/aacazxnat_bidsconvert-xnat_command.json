@@ -5,7 +5,7 @@
   "schema-version": "1.0",
   "image": "aacazxnat/bidsconvert-xnat:0.1",
   "type": "docker",
-  "command-line": "python bidsconvert-xnat.py #SESSION_ID# #OVERWRITE# #SESSION_LABEL# --host $XNAT_HOST --user $XNAT_USER --pass $XNAT_PASS --upload-by-ref False --dicomdir /dicom --niftidir /nifti",
+  "command-line": "python /src/bidsconvert-xnat.py #SESSION_ID# #OVERWRITE# #SESSION_LABEL# --host $XNAT_HOST --user $XNAT_USER --pass $XNAT_PASS --upload-by-ref False --cleanup True --proc_steps '#PROC_STEPS#' --dicomdir /dicom --niftidir /nifti",
   "override-entrypoint": true,
   "mounts": [
     {
@@ -55,6 +55,20 @@
       "replacement-key": "#SESSION_LABEL#",
       "sensitive": null,
       "command-line-flag": "--session_label",
+      "command-line-separator": null,
+      "true-value": null,
+      "false-value": null
+    },
+    {
+      "name": "proc_steps",
+      "description": "additional processing steps",
+      "type": "string",
+      "matcher": null,
+      "default-value": null,
+      "required": false,
+      "replacement-key": "#PROC_STEPS#",
+      "sensitive": null,
+      "command-line-flag": null,
       "command-line-separator": null,
       "true-value": null,
       "false-value": null
