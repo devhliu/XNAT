@@ -1,0 +1,8 @@
+{
+    "name": "bidsAppCopyAAC",
+    "description": "bidsAppCopy setup command. copys files from BIDS-AACAZ for compatibility with BIDS Apps utilities",
+    "version": "1.0",
+    "type": "docker-setup",
+    "image": "aacazxnat/bidsappcopy-setup:1.0",
+    "command-line": "bidsAppCopy.py /input /output"
+}
