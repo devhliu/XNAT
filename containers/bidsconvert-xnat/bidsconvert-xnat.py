@@ -160,6 +160,34 @@ def backupFolder(session,wfId,collectionFolder, backupLoc, log, logfilename):
 	rmtree(tempdir)
 	return foldername
 
+
+def backupProjectFolder(project,wfId,collectionFolder, backupLoc, log, logfilename):
+        if not os.path.isdir("/tmp"):
+                os.mkdir("/tmp")
+        if checkProjectResource(backupLoc, project):
+                BACKUPPREFIX = datetime.datetime.now().strftime("%m%d%y_%H%M%S_%f")
+                logtext (log, "location " + backupLoc  + " already exists ")
+                foldername = backupLoc + "_" + BACKUPPREFIX
+        else:
+                foldername=backupLoc
+
+        tempdir="/tmp/" + foldername
+        if not os.path.isdir(tempdir):
+                os.mkdir(tempdir)
+        downloadProjectfiles (collectionFolder, session, tempdir, True)
+        resourceInfo=getResourceInfo(collectionFolder,session)
+        FORMAT=resourceInfo['file_format']
+        CONTENT=resourceInfo['file_content']
+        TAGS=resourceInfo['file_tags']
+        logtext(log, 'copying files for folder %s and project %s to location %s' % (collectionFolder, project, foldername))
+        log.flush()
+        subprocess.check_output(['cp',logfilename,tempdir])
+        uploadfiles (wfId, FORMAT, CONTENT, TAGS, tempdir, "/data/projects/%s/resources/%s/files" % (project, foldername))
+        rmtree(tempdir)
+        return foldername
+
+
+
 def downloadSessionfiles (collectionFolder, session, outputDir, doit):
 	if not os.path.isdir(outputDir):
 		 os.mkdir(outputDir)
@@ -232,8 +260,8 @@ def downloadAllSessionfiles (collectionFolder, project, outputDir, doit ):
 			if  bidsTreeFolders[-1] == resName:
 				if resCollection == collectionFolder:
 					bidsTreeList.append(bidsTree)
+					newdir=outputDir
 					if doit:
-						newdir=outputDir
 						for dir in bidsTreeFolders[0:-1]:
 							newdir=os.path.join(newdir,dir)
 							if not os.path.isdir(newdir):
@@ -266,8 +294,8 @@ def downloadSessionfile (collectionFolder, project, outputDir, target,doit, reta
 			if  bidsTreeFolders[-1] == resName:
 				if resCollection == collectionFolder and resName == target:
 					bidsTreeList.append(bidsTree)
+					newdir=outputDir
 					if doit:
-						newdir=outputDir
 						if retainFolderTree:
 							for dir in bidsTreeFolders[0:-1]:
 								newdir=os.path.join(newdir,dir)
@@ -296,8 +324,8 @@ def downloadProjectfiles (collectionFolder, project, outputDir, doit ):
 		if  bidsTreeFolders[-1] == resName:
 			if resCollection == collectionFolder:
 				bidsTreeList.append(bidsTree)
+				newdir=outputDir
 				if doit:
-					newdir=outputDir
 					for dir in bidsTreeFolders[0:-1]:
 						newdir=os.path.join(newdir,dir)
 						if not os.path.isdir(newdir):
@@ -305,6 +333,40 @@ def downloadProjectfiles (collectionFolder, project, outputDir, doit ):
 					os.chdir(newdir)
 					download(resName,resourceListValue)
 	return bidsTreeList
+
+
+def downloadProjectfile (collectionFolder, project, outputDir, target, doit, retainFolderTree ):
+        if not os.path.isdir(outputDir):
+                 os.mkdir(outputDir)
+        bidsTreeList=[]
+        resourceList=get(host + "/data/projects/%s/files" % project, params={"format": "json"})
+        resourceListJson = resourceList.json()["ResultSet"]["Result"]
+        for resourceListValue in resourceListJson:
+                resCollection = resourceListValue['collection']
+                resURI = resourceListValue['URI']
+                resourceListValue['URI'] = host+resourceListValue['URI']
+                resName = resourceListValue['Name']
+                resCat_ID = resourceListValue['cat_ID']
+                resourceListValue['absolutePath']=''
+
+                bidsTree=resURI.split(resCat_ID + '/files/')[1]
+                bidsTreeFolders=bidsTree.split('/')
+                if  bidsTreeFolders[-1] == resName:
+                        if resCollection == collectionFolder and resName == target:
+                                bidsTreeList.append(bidsTree)
+                                newdir=outputDir
+                                if doit:
+                                        if retainFolderTree:
+                                            for dir in bidsTreeFolders[0:-1]:
+                                                    newdir=os.path.join(newdir,dir)
+                                                    if not os.path.isdir(newdir):
+                                                            os.mkdir(newdir)
+                                        os.chdir(newdir)
+                                        download(resName,resourceListValue)
+        return bidsTreeList
+
+
+
 
 def checkProjectResource (collectionFolder, project):
 	#check that resource folder exists at the project level
@@ -588,7 +650,7 @@ try:
 			if SUBSTEPOUT in step_info:
 				if step_info.split(SUBSTEPOUT)[1]:
 					CONFIG_RESOURCE_FOLDER_COPY=step_info.split(SUBSTEPOUT)[1].split(':')[0].strip()
-					logtext (LOGFILE,'bidsconvert:resourcecopy copy dcm2bids_config and dcm2bids_actiion to %s.' % (CONFIG_RESOURCE_FOLDER_COPY))
+					logtext (LOGFILE,'bidsconvert:resourcecopy copy dcm2bids_config and dcm2bids_action to %s.' % (CONFIG_RESOURCE_FOLDER_COPY))
 				else:
 					logtext (LOGFILE,'bidsconvert:backup parameter missing optional location information. Using default locaton %s.' % CONFIG_RESOURCE_FOLDER_COPY)
 
@@ -773,7 +835,7 @@ try:
 			USE_ADMIN_CONFIG = True
 			if RESOURCE_CONFIG:
 				dcm2bids_config=os.path.join(bidsdir,RESOURCE_CONFIG_FILE)
-				fileexists=downloadSessionfile (CONFIG_RESOURCE_FOLDER, project, bidsdir, RESOURCE_CONFIG_FILE, True, False )
+				fileexists=downloadProjectfile (CONFIG_RESOURCE_FOLDER, project, bidsdir, RESOURCE_CONFIG_FILE, True, False )
 				if fileexists:
 					USE_ADMIN_CONFIG = False
 					DO_CONFIG=True
@@ -886,7 +948,7 @@ try:
 			USE_ADMIN_ACTION = True
 			if RESOURCE_ACTION:
 				dcm2bids_action=os.path.join(bidsdir,RESOURCE_ACTION_FILE)
-				fileexists=downloadSessionfile (CONFIG_RESOURCE_FOLDER, project, bidsdir, RESOURCE_ACTION_FILE, True, False )
+				fileexists=downloadProjectfile (CONFIG_RESOURCE_FOLDER, project, bidsdir, RESOURCE_ACTION_FILE, True, False )
 				if fileexists:
 					DO_ACTION=True
 					USE_ADMIN_ACTION = False
@@ -1101,12 +1163,12 @@ try:
 
 			if DO_COPY_CONFIG:
 				logtext (LOGFILE, "Uploading configuration files to %s" % CONFIG_RESOURCE_FOLDER )
-				if checkSessionResource(CONFIG_RESOURCE_FOLDER, session):
+				if checkProjectResource(CONFIG_RESOURCE_FOLDER, project):
 					logtext (LOGFILE, "%s already exists. Will back it up and then delete it." % CONFIG_RESOURCE_FOLDER )
-					backupLoc = backupFolder(session,workflowId,CONFIG_RESOURCE_FOLDER , "backup_" + CONFIG_RESOURCE_FOLDER , LOGFILE, LOGFILENAME)
+					backupLoc = backupProjectFolder(project,workflowId,CONFIG_RESOURCE_FOLDER , "backup_" + CONFIG_RESOURCE_FOLDER , LOGFILE, LOGFILENAME)
 					logtext (LOGFILE, "moved  " + CONFIG_RESOURCE_FOLDER + " to " + backupLoc)
-					deleteFolder("/data/experiments/%s/resources/%s" % (session,CONFIG_RESOURCE_FOLDER), LOGFILE)		
-				uploadfiles (workflowId , "CONFIG_JSON", "CONFIG_FILES" ,"CONFIG", CONFIGFOLDER, "/data/experiments/%s/resources/%s/files" % (session,CONFIG_RESOURCE_FOLDER_COPY) )
+					deleteFolder("/data/projects/%s/resources/%s" % (project,CONFIG_RESOURCE_FOLDER), LOGFILE)		
+				uploadfiles (workflowId , "CONFIG_JSON", "CONFIG_FILES" ,"CONFIG", CONFIGFOLDER, "/data/projects/%s/resources/%s/files" % (project,CONFIG_RESOURCE_FOLDER_COPY) )
 
 			if resourceExists and overwrite and not BYPASS_CONFIG:
 				logtext(LOGFILE, 'Deleting existing %s folder for %s' % (BIDS_RESOURCE_FOLDER, session))
@@ -1202,6 +1264,7 @@ try:
 		logtext (LOGFILE, 'Cleaning up /tmp directory.')
 		rmtmp_command="rm -rf /tmp*"
 		os.system(rmtmp_command)
+		os.mkdir("/tmp")
 
 	logtext (LOGFILE, 'All done with session processing.')
 except Exception as e:

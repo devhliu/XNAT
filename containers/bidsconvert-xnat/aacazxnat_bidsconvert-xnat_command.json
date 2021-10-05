@@ -1,9 +1,9 @@
 {
-  "name": "aacazxnat_bidsconvert-xnat",
+  "name": "aacazxnat_bidsconvert-xnat-0.2",
   "description": "Run DICOM to BIDS conversion using dcm2bids. Upload BIDS files at session level.",
-  "version": "0.1",
+  "version": "0.2",
   "schema-version": "1.0",
-  "image": "aacazxnat/bidsconvert-xnat:0.1",
+  "image": "aacazxnat/bidsconvert-xnat:0.2",
   "type": "docker",
   "command-line": "python /src/bidsconvert-xnat.py #SESSION_ID# #OVERWRITE# #SESSION_LABEL# --host $XNAT_HOST --user $XNAT_USER --pass $XNAT_PASS --upload-by-ref False --cleanup True --proc_steps '#PROC_STEPS#' --dicomdir /dicom --niftidir /nifti",
   "override-entrypoint": true,
@@ -77,9 +77,9 @@
   "outputs": [],
   "xnat": [
     {
-      "name": "aacazxnat_bidsconvert-xnat",
+      "name": "aacazxnat_bidsconvert-xnat-0.2",
       "label": null,
-      "description": "Run DICOM to BIDS conversion at session-level using aacazxnat/bidsconvert-xnat:0.1",
+      "description": "Run DICOM to BIDS conversion at session-level using aacazxnat/bidsconvert-xnat:0.2",
       "contexts": [
         "xnat:imageSessionData"
       ],
