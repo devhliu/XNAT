@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # dicomUpload
-
+from __future__ import print_function, division, absolute_import, unicode_literals
 import os
 import glob
 import datetime
