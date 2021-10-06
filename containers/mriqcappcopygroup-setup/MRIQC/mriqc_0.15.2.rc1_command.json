@@ -1,0 +1,59 @@
+{
+    "name": "bids-mriqc-project",
+    "description": "Runs the MRIQC BIDS App at project level",
+    "version": "1.0",
+    "schema-version": "1.0",
+    "type": "docker",
+    "command-line": "/input /output participant group",
+    "override-entrypoint": false,
+    "image": "poldracklab/mriqc:0.15.2rc1",
+    "mounts": [
+        {
+            "name": "in",
+            "writable": "false",
+            "path": "/input"
+        },
+        {
+            "name": "out",
+            "writable": "true",
+            "path": "/output"
+        }
+    ],
+    "inputs": [],
+    "outputs": [
+        {
+            "name": "output",
+            "description": "Output QC files",
+            "mount": "out",
+            "required": true
+        }
+    ],
+    "xnat": [
+        {
+            "name": "bids-mriqc-project",
+            "description": "Run the MRIQC BIDS App with a project mounted",
+            "contexts": ["xnat:projectData"],
+            "external-inputs": [
+                {
+                    "name": "project",
+                    "description": "Input project",
+                    "type": "Project",
+                    "required": true,
+                    "provides-files-for-command-mount": "in",
+                    "via-setup-command": "orbisys/bidsappcopygroup-setup:1.0:bidsAppCopyGroup",
+                    "load-children": false
+                }
+            ],
+            "derived-inputs": [],
+            "output-handlers": [
+                {
+                    "name": "output-resource",
+                    "accepts-command-output": "output",
+                    "as-a-child-of-wrapper-input": "project",
+                    "type": "Resource",
+                    "label": "MRIQC-GROUP"
+                }
+            ]
+        }
+    ]
+}
