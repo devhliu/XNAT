@@ -48,7 +48,7 @@ dicomdir
  python dicomUpload.py $URL $USER $PASS $PROJECT $ROOTDIR --config $CONFIG
  ```
  
- The docker call is similar to the above with the use of the `-v` parameter to bind locations from the host into the container.
+ The docker call is similar to the above with the use of the `-v` parameter to bind locations from the host into the container. You will need to obtain the docker image first by doing the following `docker pull aacazxnat/dicomupload:0.1`
  
  ```
  docker run -it --rm -v $WORKDIR:/work -v $ROOTDIR:/dicom -v $PWD:/input aacazxnat/dicomupload:0.1 python /src/dicomUpload.py $URL $USER $PASS $PROJECT /dicom --config /input/$CONFIG  --workdir /work
