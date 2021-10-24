@@ -11,7 +11,7 @@ import multiprocessing as mp
 __version__=0.1
 
 def upload_dicoms(uploadparams):
-    logtext(None, "Processing Session : " + uploadparams)
+    
     user=uploadparams.split("^^")[0]
     password=uploadparams.split("^^")[1]
     url=uploadparams.split("^^")[2]
@@ -22,11 +22,14 @@ def upload_dicoms(uploadparams):
     sessiondir=uploadparams.split("^^")[7]
     skipdir=uploadparams.split("^^")[8]
 
+
     skipadd=''
     if len(skipdir)>0:
         skipadd='-x {}'.format(skipdir)
 
     sesname=subid+"_"+sessionid
+
+    logtext(None, "Processing Subject:{} Session:{} sessiondir:{} ".format(subid,sesname,sessiondir))
 
     rm_command = 'rm -f {}'.format(zipfile)
     os.system(rm_command)

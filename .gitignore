@@ -13,9 +13,16 @@ __pycache__/
 *.IMA
 *.dcm
 
+# images
+*.nii.gz
+*.nii
+
 # development
 work/
 archive/
+refactor/
+transferdir/
+downloadedFiles/
 
 # Distribution / packaging
 .Python
