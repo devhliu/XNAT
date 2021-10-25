@@ -37,7 +37,7 @@ def upload_dicoms(uploadparams):
     zip_command = 'zip -r -q {} {} {}'.format(zipfile, sessiondir, skipadd)
     os.system(zip_command)
 
-    curl_command = 'curl -k -u {}:{} -X POST "{}/data/services/import?PROJECT_ID={}&SUBJECT_ID={}&EXPT_LABEL={}&import-handler=DICOM-zip&overwrite=append&inbody=true" --data-binary @"{}"'.format(user,password,url,project,subid,sesname,zipfile)
+    curl_command = 'curl -k -u {}:{} -X POST "{}/data/services/import?PROJECT_ID={}&SUBJECT_ID={}&EXPT_LABEL={}&import-handler=DICOM-zip&overwrite=append" -F "file=@{}"'.format(user,password,url,project,subid,sesname,zipfile)
     os.system(curl_command)
 
 def isTrue(arg):

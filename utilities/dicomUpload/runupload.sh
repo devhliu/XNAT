@@ -1,10 +1,10 @@
 #!/bin/bash
 PROJECT="MYPROJECT"
-USER="xnatuser"
+USER="myuserid"
 #PASS="#########"
 read -rsp "Enter password: " PASS
-URL="https://xnat.org"
-ROOTDIR="/path/to/root/dicom/folder"
+URL="https:/xnat.org"
+ROOTDIR="$PWD/testupload"
 CONFIG="$PWD/Exclusions.json"
 
 

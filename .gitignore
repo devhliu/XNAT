@@ -13,6 +13,9 @@ __pycache__/
 *.IMA
 *.dcm
 
+# scripts
+testupload.sh
+
 # images
 *.nii.gz
 *.nii
@@ -23,6 +26,7 @@ archive/
 refactor/
 transferdir/
 downloadedFiles/
+testupload/
 
 # Distribution / packaging
 .Python

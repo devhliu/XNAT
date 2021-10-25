@@ -1,10 +1,10 @@
 #!/bin/bash
-PROJECT="CHIDI_PRO"
-USER="admin"
+PROJECT="MYTESTPROJECT"
+USER="user"
 #PASS="#########"
 read -rsp "Enter password: " PASS
-URL="https://aacazxnat.arizona.edu"
-ROOTDIR="/home/chidi/repos/XNAT/utilities/dicomUpload/testupload"
+URL="https://myxnat.edu"
+ROOTDIR="/tmp/testupload"
 CONFIG="Exclusions.json"
 WORKDIR=$PWD/work
 
