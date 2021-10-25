@@ -514,13 +514,18 @@ if project is None or subject is None:
 		subject = r.json()["ResultSet"]["Result"][0]["label"]
 		logtext (LOGFILE,"Subject label: " + subject)
 
+# Make Subject bids compatible - 10/23/2021 CU
+subject=subject.replace('_','-')
+
+
 session_label_all = session_label
 if session_label is None:
 	# get session label
 	r = get(host + "/data/experiments/%s" % session, params={"format": "json", "handler": "values", "columns": "label"})
 	sessionValuesJson = r.json()["ResultSet"]["Result"][0]
 	session_label_all = sessionValuesJson["label"]
-	session_label = session_label_all.split('_')[0]
+        # Now default to the last tag instead of the first - 10/23/2021 CU
+	session_label = session_label_all.split('_')[-1]
 
 	
 subdicomdir = os.path.join(dicomdir, subject)
