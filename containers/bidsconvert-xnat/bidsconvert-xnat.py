@@ -515,7 +515,9 @@ if project is None or subject is None:
 		logtext (LOGFILE,"Subject label: " + subject)
 
 # Make Subject bids compatible - 10/23/2021 CU
-subject=subject.replace('_','-')
+subject=subject.replace('_','')
+# ensure that hyphens not present in session label - 11/10/2021 CU
+subject=subject.replace('-','')
 
 
 session_label_all = session_label
@@ -524,8 +526,14 @@ if session_label is None:
 	r = get(host + "/data/experiments/%s" % session, params={"format": "json", "handler": "values", "columns": "label"})
 	sessionValuesJson = r.json()["ResultSet"]["Result"][0]
 	session_label_all = sessionValuesJson["label"]
-        # Now default to the last tag instead of the first - 10/23/2021 CU
+	# Now default to the last tag instead of the first - 10/23/2021 CU
 	session_label = session_label_all.split('_')[-1]
+	# ensure that hyphens not present in session label - 11/10/2021 CU
+	session_label = session_label.replace('-','')
+else:
+	# ensure that hyphens and underscore not present in session label - 11/10/2021 CU
+	session_label = session_label.replace('_','')
+	session_label = session_label.replace('-','')
 
 	
 subdicomdir = os.path.join(dicomdir, subject)

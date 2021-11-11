@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-"""bidsAppCopyGroup
-Copy files from all BIDS-ORBISYS folders for a project output for Bids Apps
+"""mriqcAppCopyGroup
+Copy files from all BIDS-AAZ and MRIQC-AAZ folders for a project output for Bids MRIQC App
 
 Usage:
-    bidsAppCopyGroup.py <inputDir> <outputDir>
-    bidsAppCopyGroup.py (-h | --help)
-    bidsAppCopyGroup.py --version
+    mriqcAppCopyGroup.py <inputDir> <outputDir>
+    mriqcAppCopyGroup.py (-h | --help)
+    mriqcAppCopyGroup.py --version
 
 Options:
     -h --help           Show the usage
