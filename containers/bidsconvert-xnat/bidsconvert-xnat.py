@@ -551,6 +551,8 @@ subjectBidsDir=os.path.join(bidsdir,"sub-"+subject)
 if not os.path.isdir(subjectBidsDir):
 	logtext (LOGFILE,'creating BIDS/subject directory %s.' % subjectBidsDir)
 	os.mkdir(subjectBidsDir)
+# Ensure that sessionBidsDir has value for follow up steps that need to act on bids dir
+sessionBidsDir=None
 
 # massive try block to fail gracefully
 try:
