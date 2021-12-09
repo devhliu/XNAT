@@ -1,0 +1,111 @@
+{
+  "name": "aacazxnat_qcproject-xnat-0.1",
+  "description": "Run QC pipeline at project level.",
+  "version": "0.1",
+  "schema-version": "1.0",
+  "image": "orbisys/qcproject-xnat:0.1",
+  "type": "docker",
+  "command-line": "python /src/qcproject-xnat.py #PROJECT_ID# #OVERWRITE# --host $XNAT_HOST --user $XNAT_USER --pass $XNAT_PASS --upload-by-ref False --cleanup True --proc_steps '#PROC_STEPS#' --dicomdir /dicom --niftidir /nifti",
+  "override-entrypoint": true,
+  "mounts": [
+    {
+      "name": "nifti",
+      "writable": true,
+      "path": "/nifti"
+    }
+  ],
+  "environment-variables": {},
+  "ports": {},
+  "inputs": [
+    {
+      "name": "project_id",
+      "description": "XNAT ID of the project",
+      "type": "string",
+      "matcher": null,
+      "default-value": null,
+      "required": true,
+      "replacement-key": "#PROJECT_ID#",
+      "sensitive": null,
+      "command-line-flag": "--project",
+      "command-line-separator": null,
+      "true-value": null,
+      "false-value": null
+    },
+    {
+      "name": "overwrite",
+      "description": "Overwrite any existing NIFTI and BIDS scan resources?",
+      "type": "boolean",
+      "matcher": null,
+      "default-value": "true",
+      "required": false,
+      "replacement-key": "#OVERWRITE#",
+      "sensitive": null,
+      "command-line-flag": "--overwrite",
+      "command-line-separator": null,
+      "true-value": "True",
+      "false-value": "False"
+    },
+    {
+      "name": "proc_steps",
+      "description": "additional processing steps",
+      "type": "string",
+      "matcher": null,
+      "default-value": null,
+      "required": false,
+      "replacement-key": "#PROC_STEPS#",
+      "sensitive": null,
+      "command-line-flag": null,
+      "command-line-separator": null,
+      "true-value": null,
+      "false-value": null
+    }
+  ],
+  "outputs": [],
+  "xnat": [
+    {
+      "name": "aacazxnat_qcproject-xnat-0.1",
+      "label": null,
+      "description": "Run QC pipeline at projectlevel using aacazxnat/qcproject-xnat:0.1",
+      "contexts": [
+        "xnat:projectData"
+      ],
+      "external-inputs": [
+        {
+          "name": "project",
+          "description": "Input project",
+          "type": "Project",
+          "matcher": null,
+          "default-value": null,
+          "required": true,
+          "replacement-key": null,
+          "sensitive": null,
+          "provides-value-for-command-input": null,
+          "provides-files-for-command-mount": null,
+          "via-setup-command": null,
+          "user-settable": null,
+          "load-children": true
+        }
+      ],
+      "derived-inputs": [
+        {
+          "name": "project-id",
+          "description": "The project's id",
+          "type": "string",
+          "matcher": null,
+          "default-value": null,
+          "required": true,
+          "replacement-key": null,
+          "sensitive": null,
+          "provides-value-for-command-input": "project_id",
+          "provides-files-for-command-mount": null,
+          "user-settable": null,
+          "load-children": true,
+          "derived-from-wrapper-input": "project",
+          "derived-from-xnat-object-property": "id",
+          "via-setup-command": null
+        }
+      ],
+      "output-handlers": []
+    }
+  ]
+}
