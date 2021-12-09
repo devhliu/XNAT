@@ -1009,7 +1009,7 @@ finally:
         logtext(LOGFILE, 'Uploading LOG files for session %s to location %s' % (session, LOG_RESOURCE_FOLDER))
         LOGFILE.flush()
         try: 
-            downloadSessionfiles (LOG_RESOURCE_FOLDER, session, LOGFOLDER, True, host)
+            downloadSessionfiles (LOG_RESOURCE_FOLDER, session, LOGFOLDER, True, host,sess)
             deleteFolder("/data/experiments/%s/resources/%s" % (session,LOG_RESOURCE_FOLDER), LOGFILE ,sess)
             uploadfiles (workflowId , "LOG_TXT", "LOG_FILES" ,"LOG", LOGFOLDER, "/data/experiments/%s/resources/%s/files" % (session,LOG_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
         except Exception as e:
