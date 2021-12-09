@@ -78,7 +78,7 @@ def zipdir(dirPath=None, zipFilePath=None, includeDirInZip=True):
             outFile.writestr(zipInfo, "")
     outFile.close()
 
-def uploadfiles (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host,sess):
+def uploadfiles (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host,sess,uploadByRef,args):
     queryArgs = {"format": FORMAT, "content": CONTENT, "tags": TAGS}
     raiseStatus=False
     if wfId is not None:
@@ -98,7 +98,7 @@ def uploadfiles (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host,sess):
         r.raise_for_status()
 
 # this function under construction/testing/exploration
-def uploadfile (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host, sess):
+def uploadfile (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host, sess,uploadByRef):
     queryArgs = {"format": FORMAT, "content": CONTENT, "tags": TAGS}
     raiseStatus=False
     if wfId is not None:

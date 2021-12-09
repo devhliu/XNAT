@@ -770,7 +770,7 @@ try:
                     backupLoc = backupProjectFolder(project,workflowId,CONFIG_RESOURCE_FOLDER , "backup_" + CONFIG_RESOURCE_FOLDER , LOGFILE, LOGFILENAME,host,sess)
                     logtext (LOGFILE, "moved  " + CONFIG_RESOURCE_FOLDER + " to " + backupLoc)
                     deleteFolder("/data/projects/%s/resources/%s" % (project,CONFIG_RESOURCE_FOLDER), LOGFILE,sess)     
-                uploadfiles (workflowId , "CONFIG_JSON", "CONFIG_FILES" ,"CONFIG", CONFIGFOLDER, "/data/projects/%s/resources/%s/files" % (project,CONFIG_RESOURCE_FOLDER_COPY),host , sess)
+                uploadfiles (workflowId , "CONFIG_JSON", "CONFIG_FILES" ,"CONFIG", CONFIGFOLDER, "/data/projects/%s/resources/%s/files" % (project,CONFIG_RESOURCE_FOLDER_COPY),host , sess,uploadByRef,args)
 
             if resourceExists and overwrite and not BYPASS_CONFIG:
                 logtext(LOGFILE, 'Deleting existing %s folder for %s' % (BIDS_RESOURCE_FOLDER, session))
@@ -779,7 +779,7 @@ try:
             logtext(LOGFILE, 'Uploading BIDS files for session %s to location %s' % (session,BIDS_RESOURCE_FOLDER))
             LOGFILE.flush()
             subprocess.check_output(['cp',LOGFILENAME,sessionBidsDir])      
-            uploadfiles (workflowId , "BIDS_NIFTI", "BIDS_FILES" ,"BIDS", sessionBidsDir, "/data/experiments/%s/resources/%s/files" % (session,BIDS_RESOURCE_FOLDER) ,host,sess)
+            uploadfiles (workflowId , "BIDS_NIFTI", "BIDS_FILES" ,"BIDS", sessionBidsDir, "/data/experiments/%s/resources/%s/files" % (session,BIDS_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
 
         else:
             message = 'Looks like Dcm2bids has already been run. If you want to rerun then set overwrite flag to True.'
@@ -908,7 +908,7 @@ try:
               
                 # Uploading EDDYQC files
                 print ('Uploading EDDYQC files for session %s.' % session)
-                uploadfiles (workflowId , "EDDYQC_NIFTI", "EDDYQC_FILES" ,"EDDYQC", eddyQuadQCOutdir, "/data/experiments/%s/resources/%s/files" % (session,EDDYQC_RESOURCE_FOLDER) ,host,sess)
+                uploadfiles (workflowId , "EDDYQC_NIFTI", "EDDYQC_FILES" ,"EDDYQC", eddyQCOutdir, "/data/experiments/%s/resources/%s/files" % (session,EDDYQC_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
 
         else:
             message = 'Looks like EDDYQC has already been run for session %s. If you want to rerun then set overwrite flag to True.' % session
@@ -1011,7 +1011,7 @@ finally:
         try: 
             downloadSessionfiles (LOG_RESOURCE_FOLDER, session, LOGFOLDER, True, host)
             deleteFolder("/data/experiments/%s/resources/%s" % (session,LOG_RESOURCE_FOLDER), LOGFILE ,sess)
-            uploadfiles (workflowId , "LOG_TXT", "LOG_FILES" ,"LOG", LOGFOLDER, "/data/experiments/%s/resources/%s/files" % (session,LOG_RESOURCE_FOLDER) ,host)
+            uploadfiles (workflowId , "LOG_TXT", "LOG_FILES" ,"LOG", LOGFOLDER, "/data/experiments/%s/resources/%s/files" % (session,LOG_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
         except Exception as e:
             logtext (LOGFILE, 'Exception thrown in Finally Block.')
             logtext (LOGFILE, str(e))
