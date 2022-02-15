@@ -1,0 +1,13 @@
+FROM python:3.7.12-alpine3.15
+
+RUN apk add --no-cache wget
+
+RUN pip install \
+        requests==2.23.0  \
+    && \
+    rm -r ${HOME}/.cache/pip
+
+RUN apk add --update openssl
+ADD bidsAppCopy.py /usr/local/bin
+COPY ./xnatutils /usr/local/bin/xnatutils
+

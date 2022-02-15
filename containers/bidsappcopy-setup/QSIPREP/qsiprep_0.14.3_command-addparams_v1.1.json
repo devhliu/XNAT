@@ -1,0 +1,89 @@
+{
+  "name": "bids-qsiprep-0.14.3-session",
+  "description": "Runs the QSIIPREP 0.14.3  BIDS App",
+  "version": "1.1",
+  "schema-version": "1.0",
+  "image": "pennbbl/qsiprep:0.14.3",
+  "type": "docker",
+  "command-line": "/input /output participant --fs-license-file /input/derivatives/license.txt #ADD_PARAMS#",
+  "override-entrypoint": false,
+  "mounts": [
+    {
+      "name": "in",
+      "writable": false,
+      "path": "/input"
+    },
+    {
+      "name": "out",
+      "writable": true,
+      "path": "/output"
+    }
+  ],
+  "environment-variables": {},
+  "ports": {},
+  "inputs": [
+    {
+      "name": "add_params",
+      "description": "additional parameters to pass",
+      "type": "string",
+      "matcher": null,
+      "default-value": null,
+      "required": false,
+      "replacement-key": "#ADD_PARAMS#",
+      "sensitive": null,
+      "command-line-flag": null,
+      "command-line-separator": null,
+      "true-value": null,
+      "false-value": null
+    }
+  ],
+  "outputs": [
+    {
+      "name": "output",
+      "description": "Output FMRIPREP files",
+      "required": true,
+      "mount": "out",
+      "path": null,
+      "glob": null
+    }
+  ],
+  "xnat": [
+    {
+      "name": "xnat-bids-qsiprep-0.14.3-session",
+      "label": null,
+      "description": "Run the QSIPREP 0.14.3 BIDS App with a session mounted",
+      "contexts": [
+        "xnat:imageSessionData"
+      ],
+      "external-inputs": [
+        {
+          "name": "session",
+          "description": "Input session",
+          "type": "Session",
+          "matcher": null,
+          "default-value": null,
+          "required": true,
+          "replacement-key": null,
+          "sensitive": null,
+          "provides-value-for-command-input": null,
+          "provides-files-for-command-mount": "in",
+          "via-setup-command": "aacazxnat/bidsappcopy-setup:1.1:bidsAppCopyAACconfig",
+          "user-settable": null,
+          "load-children": false
+        }
+      ],
+      "derived-inputs": [],
+      "output-handlers": [
+        {
+          "name": "output-resource",
+          "accepts-command-output": "output",
+          "via-wrapup-command": null,
+          "as-a-child-of": "session",
+          "type": "Resource",
+          "label": "QSIPREP-AACAZ",
+          "format": null
+        }
+      ]
+    }
+  ]
+}

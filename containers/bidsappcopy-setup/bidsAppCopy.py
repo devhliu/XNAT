@@ -15,55 +15,106 @@ Options:
                         This is a BIDS-ORBISYS Resource file
     <outputDir>         Directory in which BIDS formatted files should be written.
 """
-
-import os
-import sys
+from xnatutils.genutils import *
+from shutil import copytree
+import argparse
 import json
-import shutil
-from glob import glob
-from docopt import docopt
-import datetime
-from collections import OrderedDict
-import subprocess
 
-version = "1.0"
+# Constants
+version = "1.1"
 BIDSVERSION = "1.0.0"
-args = docopt(__doc__, version=version)
+BIDS_RESOURCE_FOLDER='BIDS-AACAZ'
+LOG_RESOURCE_FOLDER='LOGS-AACAZ'
+CONFIG_RESOURCE_FOLDER='CONFIG-AACAZ'
+EDDYQC_RESOURCE_FOLDER='EDDYQC-AACAZ'
+MRIQC_RESOURCE_FOLDER='MRIQC-AACAZ'
 
-inputDir = args['<inputDir>']
-outputDir = args['<outputDir>']
+# parse arguments
+parser = argparse.ArgumentParser(description="Run dcm2bids and pydeface on every file in a session")
+parser.add_argument("inputDir", help="input directory")
+parser.add_argument("outputDir", help="output directory")
+parser.add_argument("--host", help="CNDA host", required=False)
+parser.add_argument("--user", help="CNDA username", required=False)
+parser.add_argument("--password", help="Password", required=False)
+
+args, unknown_args = parser.parse_known_args()
+
+# if host not passed then we grab from environment
+if args.host is None:
+    host = os.getenv("XNAT_HOST")
+
+if args.user is None:
+    user = os.getenv("XNAT_USER")
+
+if args.password is None:
+    password = os.getenv("XNAT_PASS")
+
+host = cleanServer(host)
+print("XNAT host is {}".format(host))
+
+inputDir=args.inputDir
+outputDir=args.outputDir
 
 print("Input dir: {}".format(inputDir))
 print("Output dir: {}".format(outputDir))
 
+# obtain BIDS data
 print("Copying BIDS data.")
-
-bidsfiles=glob(os.path.join(inputDir,'RESOURCES','BIDS-AACAZ','sub*'))
+bidsfiles=glob.glob(os.path.join(inputDir,'RESOURCES',BIDS_RESOURCE_FOLDER,'sub*'))
 sub=bidsfiles[0].split('BIDS-AACAZ/')[-1]
 outputfiles=os.path.join(outputDir,sub)
-
 if os.path.exists(outputfiles):
-    shutil.rmtree(outputfiles)
+    rmtree(outputfiles)
+copytree(bidsfiles[0],outputfiles)
 
-shutil.copytree(bidsfiles[0],outputfiles)
 
-print("Done copying BIDS data.")
+# delete deface anats
+defaceanats=glob.glob(os.path.join(outputfiles,'anat','*deface*.*'))
+for file in defaceanats:
+    os.system("rm {}".format(file))
 
-print("Constructing dummy BIDS dataset description for compatibility with BIDS app.")
-dataset_description=OrderedDict()
-dataset_description['Name']='Dummy Project'
-dataset_description['BIDSVersion']=BIDSVERSION
-dataset_description['License']=""
-dataset_description['ReferencesAndLinks']=""
-with open(os.path.join(outputDir,'dataset_description.json'),'w') as datasetjson:
-     json.dump(dataset_description,datasetjson)
-print("Done creating dummy BIDS data description.")
+defaceanats=glob.glob(os.path.join(outputfiles,'ses*','anat','*deface*.*'))
+for file in defaceanats:
+    os.system("rm {}".format(file))
 
-# copies freesurfer license.txt to output folder if it exists
+
+# copy datadescription
+datadescription=os.path.join(inputDir,'RESOURCES',BIDS_RESOURCE_FOLDER,'dataset_description.json')
+cp_command="cp {} {}".format(datadescription,outputDir)
+os.system(cp_command)
+print("Copied over dataset_description.json")
+
+# Get Project name from datadescription
+Project=None
+try:
+    with open(datadescription,'r') as datafile:
+        datasetjson=json.load(datafile)
+        project=datasetjson["Name"]
+        print("identified project as {}".format(project))
+except Exception as e:
+    print("Exception thrown in bidsAppCopy.py")
+    print(str(e))
+
+if not project is None:
+    # Set up session
+    sess = requests.Session()
+    sess.verify = False
+    sess.auth = (user, password)
+    configfiles=os.path.join(outputDir,'derivatives')
+    print("attempting to connect to host....")
+    downloadProjectfiles (CONFIG_RESOURCE_FOLDER, project, configfiles, True, host,sess)
+else:
+    print("Project not defined. No files can be copied")
+
+
+# copies freesurfer license.txt to /input/derivatives folder if it exists
 LIC_LOC='https://www.dropbox.com/s/40wxja0xqw409ra/license.txt'
 print("Downloading freesurfer license to output location.")
-os.chdir(outputDir)
+configfiles=os.path.join(outputDir,'derivatives')
+if not os.access(configfiles,os.R_OK):
+    os.mkdir(configfiles)
 
+os.chdir(configfiles)
 # python 3.6 uses .run?
 subprocess.call(["wget",LIC_LOC])
 print("Done downloading freesurfer license.")
