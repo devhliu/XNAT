@@ -1,5 +1,6 @@
 from xnatutils.genutils import *
 import os
+import getpass
 __version__=0.1
 
 def get_parser():
@@ -7,9 +8,7 @@ def get_parser():
     from argparse import RawTextHelpFormatter
     parser = ArgumentParser(description="Download session files")
     parser.add_argument("--host", default="https://cnda.wustl.edu", help="CNDA host", required=True)
-    parser.add_argument("--user", help="CNDA username", required=True)
-    parser.add_argument("--password", help="Password", required=True)
-    parser.add_argument("--session", help="Session ID", required=True)
+    parser.add_argument("--project", help="Project ID", required=True)
     parser.add_argument("--resource", help="Resource Folder", required=True)
     parser.add_argument("--outputdir", help="Output Directory", required=False)
     parser.add_argument("--upload-by-ref", help="Upload \"by reference\". Only use if your host can read your file system.")
@@ -18,9 +17,9 @@ def get_parser():
 def main():
     args, unknown_args = get_parser().parse_known_args()
     host = cleanServer(args.host)
-    user = args.user
-    password = args.password
-    session = args.session
+    user = input("User: ")
+    password = getpass.getpass()
+    project = args.project
     resource = args.resource
     if args.outputdir is None:
         outputdir=os.path.join(os.getcwd(),'output')
@@ -35,9 +34,9 @@ def main():
 
     connection = startSession(user,password)
 
-    filedown = downloadSessionfiles (resource, session, outputdir, True, host, connection)
+    filedown = downloadAllSessionfiles (resource, project, outputdir, True, host, connection)
 
-    print("DownloadSession.py finished.")
+    print("xnatDownloadAllSessions.py finished.")
 
 
 # This is the standard boilerplate that calls the main() function.

@@ -846,6 +846,10 @@ try:
 			
 			## Get site- and project-level configs
 			#bidsmaplist = []
+			# CPU 2/15/2022 - provode functionlaity to non-anonymize phantom bids json
+			PHANTOM = False
+			if "ACR" in subject:
+				PHANTOM = True
 
 			USE_ADMIN_CONFIG = True
 			if RESOURCE_CONFIG:
@@ -855,6 +859,12 @@ try:
 					USE_ADMIN_CONFIG = False
 					DO_CONFIG=True
 					logtext(LOGFILE,"Resource action file %s successfully obtained from %s" % (RESOURCE_CONFIG_FILE, CONFIG_RESOURCE_FOLDER))
+					if PHANTOM:
+						with open(dcm2bids_config,'r') as infile:
+							config=json.load(infile)
+						config["dcm2niixOptions"]="-b y -ba n -z y -f '%3s_%f_%p_%t'"
+						with open(dcm2bids_config, 'w') as outfile:
+							json.dump(config, outfile)					
 				else:
 					DO_CONFIG=False
 					USE_ADMIN_CONFIG=True
@@ -866,6 +876,10 @@ try:
 				r = sess.get(host + "/data/projects/%s/config/%s" % (project,bidsconfig), params={"contents": True})
 				if r.ok:
 					config = r.json()
+					#CPU 2/15/2022 -  Non-anonymize phantom bids json
+					if PHANTOM:
+						config["dcm2niixOptions"]="-b y -ba n -z y -f '%3s_%f_%p_%t'"
+						
 					dcm2bids_config=os.path.join(bidsdir,'dcm2bids_config.json')
 					with open(dcm2bids_config, 'w') as outfile:
 						json.dump(config, outfile)
@@ -884,7 +898,6 @@ try:
 						json.dump(config_copy, outfile_copy)
 				else:
 					logtext (LOGFILE,"Could not read project BIDS config map")
-
 
 			if DO_CONFIG and not BYPASS_CONFIG:
 				if overwrite:

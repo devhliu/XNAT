@@ -78,7 +78,7 @@ def zipdir(dirPath=None, zipFilePath=None, includeDirInZip=True):
             outFile.writestr(zipInfo, "")
     outFile.close()
 
-def uploadfiles (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host,sess):
+def uploadfiles (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host,sess,uploadByRef,args):
     queryArgs = {"format": FORMAT, "content": CONTENT, "tags": TAGS}
     raiseStatus=False
     if wfId is not None:
@@ -98,7 +98,7 @@ def uploadfiles (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host,sess):
         r.raise_for_status()
 
 # this function under construction/testing/exploration
-def uploadfile (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host, sess):
+def uploadfile (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host, sess,uploadByRef):
     queryArgs = {"format": FORMAT, "content": CONTENT, "tags": TAGS}
     raiseStatus=False
     if wfId is not None:
@@ -110,7 +110,7 @@ def uploadfile (wfId, FORMAT, CONTENT, TAGS, outpath, hostpath, host, sess):
         r.raise_for_status()
 
 # this function under construction/testing/ex[ploration
-def deletefile (hostpath, log, host,sess):
+def deletefile (workflowId,hostpath, log, host,sess):
     try:
         queryArgs={}
         if workflowId is not None:
@@ -121,7 +121,7 @@ def deletefile (hostpath, log, host,sess):
         logtext (log,"There was a problem deleting file " + hostpath )
         logtext (log,"    " + str(e))
 
-def deleteFolder (hostpath, log, host,sess):
+def deleteFolder (workflowId,hostpath, log, host,sess):
     try:
         queryArgs={}
         if workflowId is not None:
@@ -214,7 +214,7 @@ def downloadSessionfiles (collectionFolder, session, outputDir, doit, host, sess
                     try:
                         download(resName,resourceListValue,sess)
                     except:
-                        print("Problems downloading" + resourceListValue['absolutePath'])
+                        print("PROBLEM downloading {}. This file has been skipped.".format(resName))
     return bidsTreeList
 
 def getResourceInfo(collectionFolder, session, host,sess):
@@ -236,16 +236,16 @@ def checkSessionResource (collectionFolder, session, host,sess):
     return False
    
 
-def downloadAllSessionfiles (collectionFolder, project, outputDir, doit, host,sess):
+def downloadAllSessionfiles (collectionFolder, project, outputDir, doit, host,sess,bump=False):
     if not os.path.isdir(outputDir):
          os.mkdir(outputDir)
     bidsTreeList=[]
     #obtain all the sessions for a project
-    sessionList = get(sess, host + "/data/projects/%s/experiments" %project, params={"format":"json"})
+    sessionList = get(sess,host + "/data/projects/%s/experiments" %project, params={"format":"json"})
     sessionListJson = sessionList.json()["ResultSet"]["Result"]
     for sessionListValue in sessionListJson:
         sessionAccession = sessionListValue['ID']
-        resourceList=get(sess, host + "/data/experiments/%s/files" % sessionAccession, params={"format": "json"})
+        resourceList=get(sess,host + "/data/experiments/%s/files" % sessionAccession, params={"format": "json"})
         resourceListJson = resourceList.json()["ResultSet"]["Result"]
         for resourceListValue in resourceListJson:
             resCollection = resourceListValue['collection']
@@ -259,7 +259,9 @@ def downloadAllSessionfiles (collectionFolder, project, outputDir, doit, host,se
             bidsTreeFolders=bidsTree.split('/')
             if  bidsTreeFolders[-1] == resName:
                 if resCollection == collectionFolder:
-                    bidsTreeList.append(bidsTree)
+                    if bump:
+                        bidsTreeFolders.insert(0,sessionAccession)
+                    bidsTreeList.append('/'.join(bidsTreeFolders))
                     newdir=outputDir
                     if doit:
                         for dir in bidsTreeFolders[0:-1]:
@@ -270,10 +272,12 @@ def downloadAllSessionfiles (collectionFolder, project, outputDir, doit, host,se
                         try:
                             download(resName,resourceListValue,sess)
                         except:
-                            print("Problems downloading " + resourceListValue['absolutePath'])
+                            print("PROBLEM downloading {}. This file has been skipped.".format(resName))
 
     return bidsTreeList
 
+
+# Very similar to downloadAllSessionFiles but looks for a target file amongst all the session files.
 def downloadSessionfile (collectionFolder, project, outputDir, target,doit, retainFolderTree, host,sess ):
     if not os.path.isdir(outputDir):
          os.mkdir(outputDir)
@@ -306,10 +310,7 @@ def downloadSessionfile (collectionFolder, project, outputDir, target,doit, reta
                                 if not os.path.isdir(newdir):
                                     os.mkdir(newdir)
                         os.chdir(newdir)
-                        try:
-                            download(resName,resourceListValue,sess)
-                        except:
-                            print("Problems downloading "+ resourceListValue['absolutePath'])
+                        download(resName,resourceListValue,sess)
                         return bidsTreeList
 
 def downloadProjectfiles (collectionFolder, project, outputDir, doit, host , sess):
@@ -342,6 +343,7 @@ def downloadProjectfiles (collectionFolder, project, outputDir, doit, host , ses
     return bidsTreeList
 
 
+# very similar to downloadProjectFiles but looks for a target file
 def downloadProjectfile (collectionFolder, project, outputDir, target, doit, retainFolderTree, host, sess ):
         if not os.path.isdir(outputDir):
                  os.mkdir(outputDir)
@@ -373,8 +375,6 @@ def downloadProjectfile (collectionFolder, project, outputDir, target, doit, ret
         return bidsTreeList
 
 
-
-
 def checkProjectResource (collectionFolder, project, host, sess):
     #check that resource folder exists at the project level
     projectList = get(sess, host + "/data/projects/%s/resources" %project, params={"format":"json"})
@@ -384,14 +384,134 @@ def checkProjectResource (collectionFolder, project, host, sess):
         if resCollection == collectionFolder:
             return True
     return False
+
+def checkSubjectResource (collectionFolder, project, subject, host, sess):
+    #check that resource folder exists at the project level
+    projectList = get(sess, host + "/data/projects/%s/subjects/%s/resources" % (project,subject) , params={"format":"json"})
+    projectListJson = projectList.json()["ResultSet"]["Result"]
+    for projectListValue in projectListJson:
+        resCollection = projectListValue['label']
+        if resCollection == collectionFolder:
+            return True
+    return False
+
+def downloadSessionDicomsZip(project, subject, session, outputDir, host, sess):
+    if not os.path.isdir(outputDir):
+        os.mkdir(outputDir)
+
+    os.chdir(outputDir)
+    resName=project + '_' + subject + '_' + session + '.zip'
+    resourceListValue={}
+    resourceListValue['URI']=host + "/data/projects/{}/subjects/{}/experiments/{}/scans/ALL/files?format=zip".format(project,subject,session) 
+    resourceListValue['absolutePath']=''
+    try:
+        download(resName,resourceListValue,sess)
+    except:
+        print("PROBLEM downloading {}. This file has been skipped.".format(resName))
+
+def downloadSubjectfiles (collectionFolder, project, subject, outputDir, doit, host, sess):
+    if not os.path.isdir(outputDir):
+        os.mkdir(outputDir)
+    bidsTreeList=[]
+    resourceList=get(sess, host + "/data/projects/%s/subjects/%s/files" % (project, subject), params={"format": "json"})
+    resourceListJson = resourceList.json()["ResultSet"]["Result"]
+    for resourceListValue in resourceListJson:
+        resCollection = resourceListValue['collection']
+        resURI = resourceListValue['URI']
+        resourceListValue['URI'] = host+resourceListValue['URI']
+        resName = resourceListValue['Name']
+        resCat_ID = resourceListValue['cat_ID']
+        resourceListValue['absolutePath']=''
+
+        bidsTree=resURI.split(resCat_ID + '/files/')[1]
+        bidsTreeFolders=bidsTree.split('/')
+        if  bidsTreeFolders[-1] == resName:
+            if resCollection == collectionFolder:
+                bidsTreeList.append(bidsTree)
+                newdir=outputDir
+                if doit:
+                    for dir in bidsTreeFolders[0:-1]:
+                        newdir=os.path.join(newdir,dir)
+                        if not os.path.isdir(newdir):
+                            os.mkdir(newdir)
+                    os.chdir(newdir)
+                    try:
+                        download(resName,resourceListValue,sess)
+                    except:
+                        print("PROBLEM downloading {}. This file has been skipped.".format(resName))
+    return bidsTreeList
+
+def downloadSubjectSessionfiles (collectionFolder, project, subject, outputDir, doit, host,sess,bump=False):
+    if not os.path.isdir(outputDir):
+        os.mkdir(outputDir)
+    bidsTreeList=[]
+    #obtain all the sessions for a project
+    sessionList = get(sess,host + "/data/projects/%s/experiments" %project, params={"format":"json"})
+    sessionListJson = sessionList.json()["ResultSet"]["Result"]
+    for sessionListValue in sessionListJson:
+        sessionAccession = sessionListValue['ID']
+        sessionSubject = getSubjectFromSession(sess,sessionAccession, host)
+        if sessionSubject[0] != subject:
+            continue
+
+
+        resourceList=get(sess,host + "/data/experiments/%s/files" % sessionAccession, params={"format": "json"})
+        resourceListJson = resourceList.json()["ResultSet"]["Result"]
+        for resourceListValue in resourceListJson:
+            resCollection = resourceListValue['collection']
+            resURI = resourceListValue['URI']
+            resourceListValue['URI'] = host+resourceListValue['URI']
+            resName = resourceListValue['Name']
+            resCat_ID = resourceListValue['cat_ID']
+            resourceListValue['absolutePath']=''
+
+            bidsTree=resURI.split(resCat_ID + '/files/')[1]
+            bidsTreeFolders=bidsTree.split('/')
+            if  bidsTreeFolders[-1] == resName:
+                if resCollection == collectionFolder:
+                    if bump:
+                        bidsTreeFolders.insert(0,sessionAccession)
+                    bidsTreeList.append('/'.join(bidsTreeFolders))
+                    newdir=outputDir
+                    if doit:
+                        for dir in bidsTreeFolders[0:-1]:
+                            newdir=os.path.join(newdir,dir)
+                            if not os.path.isdir(newdir):
+                                os.mkdir(newdir)
+                        os.chdir(newdir)
+                        try:
+                            download(resName,resourceListValue,sess)
+                        except:
+                            print("PROBLEM downloading {}. This file has been skipped.".format(resName))
+    return bidsTreeList
+
+
+#copy down BIDS file for project
+def getBids(project, bidsDir, bidsFolder, host, sess,overwrite=True):
+
+    if not os.path.exists(bidsDir):
+        os.mkdir(bidsDir)
+
+    if not os.listdir(bidsDir) or overwrite:
+        filesDownloaded= downloadAllSessionfiles (bidsFolder, project, bidsDir, True, host,sess)
+    # remove all log files
+    loggingfiles = glob.glob(os.path.join(bidsDir,"*.log"))
+    for loggingfile in loggingfiles:
+        os.remove(loggingfile)
+
+    createDatasetDescription(bidsDir, project)
    
 
 # copy down the BIDS files for just this session
-def bidsprepare(bidsDir, bidsFolder, host,sess):
-    os.chdir("/tmp")
+def bidsprepare( project, session,bidsDir, bidsFolder, host,sess, overwrite=True):
+
+    if not os.path.exists(bidsDir):
+        os.mkdir(bidsDir)
+
     if not os.listdir(bidsDir) or overwrite:
         filesDownloaded= downloadSessionfiles (bidsFolder, session, bidsDir, True, host,sess)
-    createDatasetDescription(bidsDir)
+    #remove all log files
+    createDatasetDescription(bidsDir, project)
 
 def createDatasetDescription(bidsDir, proj):
     datasetjson=os.path.join(bidsDir,'dataset_description.json')
@@ -419,12 +539,14 @@ def logtext(logfile, textstr):
     stamp=datetime.datetime.now().strftime("%m-%d-%y %H:%M:%S%p")
     textstring =  str(stamp) + '  ' + str(textstr)
     print(textstring)
-    logfile.write(textstring + '\n')
+    if logfile is not None:
+        logfile.write(textstring + '\n')
 
 def posttext(logfile, textstr):
     textstring =str(textstr)
     print(textstring)
-    logfile.write(textstring + '\n')
+    if logfile is not None:
+        logfile.write(textstring + '\n')
 
 def getProjectInfo(sess, project, host):    
     projectInfo = {}

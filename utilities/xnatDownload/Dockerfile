@@ -21,7 +21,7 @@ WORKDIR /home/aacazxnat
 ENV HOME="/home/aacazxnat"
 
 WORKDIR /src
-COPY ./xnatUpload.py /src/xnatUpload.py
+COPY ./xnatDownload.py /src/xnatDownload.py
 ADD xnatutils.gz /src
 ENV PATH="/src/:$PATH"
 ENV TZ=America/Phoenix

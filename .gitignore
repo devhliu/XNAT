@@ -8,6 +8,7 @@ __pycache__/
 
 #archives
 *.zip
+*.gz
 
 # Dicoms
 *.IMA
@@ -15,6 +16,8 @@ __pycache__/
 
 # scripts
 testupload.sh
+testutils.sh
+testutils.py
 
 # images
 *.nii.gz
@@ -27,6 +30,7 @@ refactor/
 transferdir/
 downloadedFiles/
 testupload/
+test/
 
 # Distribution / packaging
 .Python

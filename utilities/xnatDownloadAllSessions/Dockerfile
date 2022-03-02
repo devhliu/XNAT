@@ -21,8 +21,8 @@ WORKDIR /home/aacazxnat
 ENV HOME="/home/aacazxnat"
 
 WORKDIR /src
-COPY ./xnatDownloadSession.py /src/xnatDownloadSession.py
-ADD xnatutils /src/xnatutils
+COPY ./xnatDownloadAllSessions.py /src/xnatDownloadAllSessions.py
+ADD xnatutils.gz /src
 ENV PATH="/src/:$PATH"
 ENV TZ=America/Phoenix
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone

@@ -1,182 +1,142 @@
-#!/usr/bin/env python
-# dicomUpload
-from __future__ import print_function, division, absolute_import, unicode_literals
+from xnatutils.genutils import *
 import os
-import glob
-import datetime
-import json
-import multiprocessing as mp
-
-
+import getpass
 __version__=0.1
-
-def upload_dicoms(uploadparams):
-    
-    user=uploadparams.split("^^")[0]
-    password=uploadparams.split("^^")[1]
-    url=uploadparams.split("^^")[2]
-    project=uploadparams.split("^^")[3]
-    subid=uploadparams.split("^^")[4]
-    sessionid=uploadparams.split("^^")[5]
-    zipfile=uploadparams.split("^^")[6]
-    sessiondir=uploadparams.split("^^")[7]
-    skipdir=uploadparams.split("^^")[8]
-
-
-    skipadd=''
-    if len(skipdir)>0:
-        skipadd='-x {}'.format(skipdir)
-
-    sesname=subid+"_"+sessionid
-
-    logtext(None, "Processing Subject:{} Session:{} sessiondir:{} ".format(subid,sesname,sessiondir))
-
-    rm_command = 'rm -f {}'.format(zipfile)
-    os.system(rm_command)
-
-    zip_command = 'zip -r -q {} {} {}'.format(zipfile, sessiondir, skipadd)
-    os.system(zip_command)
-
-    curl_command = 'curl -k -u {}:{} -X POST "{}/data/services/import?PROJECT_ID={}&SUBJECT_ID={}&EXPT_LABEL={}&import-handler=DICOM-zip&overwrite=append&inbody=true" --data-binary @"{}"'.format(user,password,url,project,subid,sesname,zipfile)
-    os.system(curl_command)
-
-def isTrue(arg):
-    return arg is not None and (arg == 'Y' or arg == '1' or arg == 'True')
 
 def get_parser():
     from argparse import ArgumentParser
     from argparse import RawTextHelpFormatter
-
-    parser = ArgumentParser(description="Python DICOM upload for XNAT."
-        "Multiprocessing bulk upload.",formatter_class=RawTextHelpFormatter)
-    parser.add_argument('xnaturl', action='store',  
-        help='url path to xnat e.g. https://xnat.org.')
-    parser.add_argument('user', action='store',
-        help='User id for logon to xnat')
-    parser.add_argument('password', action='store',
-        help='password for login')
-    parser.add_argument('project', action='store',
-        help='Project ID')
-    parser.add_argument('dicomdir', action='store', 
-        help='The root directory that contains the dicom folder of dicoms to send.')
-    parser.add_argument('--config', action='store',
-        help='File containing  config info for managing dicoms.')
-    parser.add_argument('--logname', action='store',
-        help='name for the log file (without extension) which will be created in work directory.')
-    parser.add_argument('--workdir', action='store',
-        help='Work directory for output of log file and other temporary files')
-    parser.add_argument('--procs', action='store',
-        help='Number of multiprocessing cores')
-    parser.add_argument('--debugmode', action='store',
-        help='Run in debug mode as single thread')
-
-
+    parser = ArgumentParser(description="upload resource sto XNAT")
+    parser.add_argument("command", default="uploadSession", help="uploadSession, uploadSubject, uploadProject")
+    parser.add_argument("xnatfolder", default="DEFAULT-ORBISYS", help="collection name")
+    parser.add_argument("extDir", default="./", help="source directory")
+    parser.add_argument("--host", default="https://cnda.wustl.edu", help="CNDA host", required=True)
+    parser.add_argument("--session", help="Session ID", required=False)
+    parser.add_argument("--subject", help="subjecy ID", required=False)
+    parser.add_argument("--project", help="Project", required=False)
+    parser.add_argument("--user", help="user", required=False)
+    parser.add_argument("--password", help="password", required=False)    
+    parser.add_argument("--labels", default="DEFAULT,DEFAULT_FILES,DEFAULT", help="label values for uploaded files",  nargs='?', required=False)
+    parser.add_argument("--overwrite", help="Overwrite NIFTI files if they exist")
+    parser.add_argument("--upload-by-ref", help="Upload \"by reference\". Only use if your host can read your file system.")
+    parser.add_argument('--version', action='version', version='%(prog)s 1')
     return parser
 
-def logtext(logfile, textstr):
-    stamp=datetime.datetime.now().strftime("%m-%d-%y %H:%M:%S%p")
-    textstring=stamp + '  ' + textstr
-    print(textstring)
-    if not logfile == None:
-        logfile.write(textstring+'\n')
 
 
 def main():
-    opts = get_parser().parse_args()
-    ROOTDIR=os.path.abspath(opts.dicomdir)
-    password=opts.password
-    user=opts.user
-    xnaturl=opts.xnaturl
-    project=opts.project
-    debugmode = isTrue(opts.debugmode)
+    args, unknown_args = get_parser().parse_known_args()
+    host = cleanServer(args.host)
+    
+    command = args.command
+    xnatfolder = args.xnatfolder
+    extDir = args.extDir
 
-    if opts.workdir:
-        WORKDIR=os.path.abspath(opts.workdir)
+    if args.user is None:
+        user = input("User: ")
+        args.user = user
+
+    if args.password is None:
+        password = getpass.getpass()
+        args.password = password
+    
+    session = args.session
+    subject = args.subject
+    project = args.project
+    labels = args.labels
+    overwrite = isTrue(args.overwrite)
+    uploadByRef = isTrue(args.upload_by_ref)
+    additionalArgs = unknown_args if unknown_args is not None else []
+    
+    workflowId=None
+
+    # Set up session
+    connection = startSession(user,password)
+
+    defaultlabels="DEFAULT,DEFAULT_FILES,DEFAULT".split(",")
+    sublabels = labels.split(",")
+    for counter, value in enumerate (sublabels):
+        if counter > 2:
+            break
+        else:
+            defaultlabels[counter]=value
+
+    UPLOAD=False        
+
+    if command == 'uploadSession':
+        if session is None:
+            print("Cannot upload session without a valid session label. Please specify session with --session")
+        else:
+            if checkSessionResource(xnatfolder,session,host, connection):
+                print("Resource {} already exists for session {}".format(xnatfolder,session))
+                if overwrite:
+                    print("Will delete resource and overwrite.")
+                    deleteFolder(workflowId, "/data/experiments/%s/resources/%s" % (session,xnatfolder), None,host,connection)
+                    UPLOAD=True
+                else:
+                    print("Specify --overwrite='Y' to delete resource and complete upload.")
+            else:
+                UPLOAD=True
+
+            if UPLOAD:
+                print("Uploading Resource {} to session {}".format(xnatfolder,session))
+                uploadfiles (workflowId , defaultlabels[0], defaultlabels[1] ,defaultlabels[2], extDir, "/data/experiments/%s/resources/%s/files" % (session, xnatfolder), host, connection, uploadByRef, args )
+            else:
+                print("upload aborted.")
+    
+     
+    elif command == 'uploadSubject':
+        if subject is None or project is None:
+            print("Cannot upload subject resources without a valid subject and project label. Please specify subject with --subject and project with --project")
+        else:
+            if checkSubjectResource(xnatfolder,project,subject,host, connection):
+                print("Resource {} already exists for subject {} in project {}".format(xnatfolder,subject,project))
+                if overwrite:
+                    print("Will delete resource and overwrite.")
+                    deleteFolder(workflowId, "/data/projects/%s/subjects/%s/resources/%s" % (project,subject,xnatfolder), None,host,connection)
+                    UPLOAD=True
+                else:
+                    print("Specify --overwrite='Y' to delete resource and complete upload.")
+            else:
+                UPLOAD=True
+
+            if UPLOAD:
+                print("Uploading Resource {} to subject {} in project {}".format(xnatfolder,subject, project))
+                uploadfiles (workflowId , defaultlabels[0], defaultlabels[1] ,defaultlabels[2], extDir, "/data/projects/%s/subjects/%s/resources/%s/files" % (project, subject,xnatfolder),host, connection, uploadByRef, args )
+            else:
+                print("upload aborted.")
+            
+    elif command == 'uploadProject':
+        if project is None:
+            print("Cannot upload project without a valid project label. Please specify project with --project")
+        else:
+            if checkProjectResource(xnatfolder,project,host, connection):
+                print("Resource {} already exists for project {}".format(xnatfolder,project))
+                if overwrite:
+                    print("Will delete resource and overwrite.")
+                    deleteFolder(workflowId, "/data/projects/%s/resources/%s" % (project,xnatfolder), None,host,connection)
+                    UPLOAD=True
+                else:
+                    print("Specify --overwrite='Y' to delete resource and complete upload.")
+            else:
+                UPLOAD=True
+
+            if UPLOAD:
+                print("Uploading Resource {} to  project {}".format(xnatfolder, project))
+                uploadfiles (workflowId , defaultlabels[0], defaultlabels[1] ,defaultlabels[2], extDir, "/data/projects/%s/resources/%s/files" % (project, xnatfolder), host, connection, uploadByRef, args )
+            else:
+                print("upload aborted.")
+            
+    
     else:
-        WORKDIR=os.getcwd()
-
-    if opts.config:
-        CONFIGFILE=os.path.abspath(opts.config)
-    else:
-        CONFIGFILE=None
-
-    exclusions=[]
-    if not CONFIGFILE == None:
-        configFile=open(CONFIGFILE)
-        configs=json.load(configFile)
-        configFile.close()
-        exclusions=configs["Exclude"]
-
-    if opts.logname:
-        BASELOGNAME=opts.logname
-    else:
-        BASELOGNAME='dicomUpload'
-
-    TIMESTAMP=datetime.datetime.now().strftime("%m%d%y%H%M%S%p")
-    LOGFILENAME=BASELOGNAME + '_' + TIMESTAMP + '.log'
-    LOGFILE = open(os.path.join(WORKDIR,LOGFILENAME), 'w')
-
-    #start pool
-    if not opts.procs:
-        procs=mp.cpu_count()
-    else:
-            procs=opt.procs
-
-    if debugmode:
-        pool = mp.Pool(procs)
+    	print("Do not recognize command passed. use uploadSession, uploadSubject or uploadProject")
 
 
-    # enter password and userid
-    #logtext(LOGFILE,"Please enter lgin credentials for '" + xnaturl)
-    #user=input('userid :')
-    #password=getpass.getpass(prompt='password : ', stream=None)
-
-    subjects = [f for f in glob.glob(ROOTDIR + '/*') if os.path.isdir(f)]
+    print("xnatUpload.py finished.")
 
 
-    dicombatch=[]
-    for subject in subjects:
-        subid=os.path.basename(subject)
-        logtext(LOGFILE,"processing subject '" + subid + "' located at " + subject)
-        #ae.add_requested_context(MRImageStorage)
-        
-        for session in os.listdir(subject):
-            skipdir=''
-            logtext(LOGFILE, "Processing Session: " + session)
-            fulldicomdir=subject + "/" + session
-            # incorporate skipping dicoms at a later date?
-            for dicomdir in os.listdir(subject + '/' + session):
-                logtext(LOGFILE, "Processing Dicom: " + dicomdir)
-                skipdicom=False
-
-                for index, value in enumerate(exclusions):
-                    if value.upper() in dicomdir.upper():
-                        logtext(LOGFILE, dicomdir + " will be excluded. continuing to next dicom")
-                        skipdicom=True
-                        break
-
-                if skipdicom:
-                    skipdir=skipdir + '"{}/*" '.format(fulldicomdir + '/' + dicomdir)
-                    continue
-
-            #    fulldicomdir=subject + "/" + session + "/" + dicomdir
-             
-            zipfile = os.path.join(WORKDIR,subid+"_"+session+".zip")
-            mpcommand='{}^^{}^^{}^^{}^^{}^^{}^^{}^^{}^^{}'.format(user,password,xnaturl,project,subid,session,zipfile, fulldicomdir,skipdir)
-            dicombatch.append(mpcommand)
-
-    if not debugmode:
-        for dicomcmd in dicombatch:
-            upload_dicoms(dicomcmd)
-
-    else:
-        pool.map(upload_dicoms,(dicombatch))
-
-    if debugmode:
-        pool.close()
-        pool.join()
-
-    logtext(LOGFILE,"upload complete")
 # This is the standard boilerplate that calls the main() function.
 if __name__ == '__main__':
     main()
+
+
