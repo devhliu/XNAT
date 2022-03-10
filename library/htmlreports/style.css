@@ -1,0 +1,51 @@
+.snr-table {
+  font-family: arial, sans-serif;
+  border-collapse: collapse;
+  margin: 25px 10px;
+  font-size: 0.9em;
+  min-width: 400px;
+  float: left;
+  padding: 15px;
+}
+
+
+.snr-table td, th {
+  border: 1px solid #dddddd;
+  text-align: left;
+  padding: 8px;
+
+}
+
+.snr-table tr:nth-child(even) {
+  background-color: #dddddd;
+}
+
+.geometry-table {
+  font-family: arial, sans-serif;
+  border-collapse: collapse;
+  margin: 25px 10px;
+  font-size: 0.9em;
+  min-width: 400px;
+  padding: 15px;
+}
+
+
+.geometry-table td, th {
+  border: 1px solid #dddddd;
+  text-align: left;
+  padding: 8px;
+
+}
+
+.geometry-table tr:nth-child(even) {
+  background-color: #dddddd;
+}
+
+
+.clearfloat:after {
+	content: " ";
+	visibility: hidden;
+	clear: both;
+	display: block;
+	height: 0;
+}
