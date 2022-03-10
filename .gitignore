@@ -22,6 +22,7 @@ testutils.py
 # images
 *.nii.gz
 *.nii
+PhantomROI/
 
 # development
 work/

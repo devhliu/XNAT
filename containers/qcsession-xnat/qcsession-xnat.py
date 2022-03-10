@@ -1,4 +1,5 @@
 from xnatutils.genutils import *
+from xnatutils.phantomdefs import *
 from shutil import copytree
 from bids import BIDSLayout
 import nibabel as nib
@@ -54,20 +55,26 @@ bidsconfig=args.bidsconfig
 
 builddir = os.getcwd()
 
-# Set up working directory
-if not os.access(dicomdir, os.R_OK):
-    os.mkdir(dicomdir)
+# create niftidir
 if not os.access(niftidir, os.R_OK):
     os.mkdir(niftidir)
+
 bidsdir = niftidir + "/BIDS"
 if not os.access(bidsdir, os.R_OK):
     os.mkdir(bidsdir)
+
+# Clunky - we are just going to overide /dicoms for now so we can debug better
+dicomdir = niftidir + "/DICOMS"
+if not os.access(dicomdir, os.R_OK):
+    os.mkdir(dicomdir)
 
 
 BIDS_RESOURCE_FOLDER='BIDS-AACAZ'
 LOG_RESOURCE_FOLDER='LOGS-AACAZ'
 CONFIG_RESOURCE_FOLDER='CONFIG-AACAZ'
 EDDYQC_RESOURCE_FOLDER='EDDYQC-AACAZ'
+PHANTOMROI_RESOURCE_FOLDER='PHANTOMROI-AACAZ'
+PHANTOMQC_RESOURCE_FOLDER='PHANTOMQC-AACAZ'
 
 LOGFOLDER=os.path.join(niftidir,LOG_RESOURCE_FOLDER)
 if not os.access(LOGFOLDER, os.R_OK):
@@ -150,6 +157,39 @@ if not os.path.isdir(sessionBidsDir):
 
 # massive try block to fail gracefully
 try:
+
+    PHANTOM_NAMES = [ 'ACR']
+    # Download and convert Dicoms to BIDS format
+    CURRSTEP='initialisation'
+    if CURRSTEP in proc_steps:  
+    # Get list of scan ids
+        #only run if overwrite flag set or eddy_quad files  not previously created
+        os.chdir("/tmp")
+
+        # find step-specific parameters
+        step_info=''
+        proc_steps_list=proc_steps.split(",")
+        for step_item in proc_steps_list:
+            if CURRSTEP in step_item:
+                step_info = step_item
+                break
+
+        PHANTOM_NAMES = []
+        SUBSTEP=':phantomnames'
+        SUBSTEPOUT=SUBSTEP + '='
+        if SUBSTEP in step_info:
+            if SUBSTEPOUT in step_info:
+                if step_info.split(SUBSTEPOUT)[1]:
+                    commandInput=step_info.split(SUBSTEPOUT)[1].split(':')[0]
+                    PHANTOM_NAMES=commandInput.split('|')
+
+    # CPU 2/15/2022 - provode functionlaity to non-anonymize phantom bids json
+    PHANTOM = False
+    for PHANTOM_NAME in PHANTOM_NAMES:
+        if PHANTOM_NAME in subject:
+            PHANTOM = True
+            break
+
     # Download and convert Dicoms to BIDS format
     CURRSTEP='bidsconvert'
     if CURRSTEP in proc_steps:  
@@ -438,12 +478,7 @@ try:
                 os.chdir(builddir)
                 logtext (LOGFILE,'Done downloading for scan %s.' % scanid)
             
-            ## Get site- and project-level configs
-            #bidsmaplist = []
-           # CPU 2/15/2022 - provode functionlaity to non-anonymize phantom bids json
-           PHANTOM = False
-           if "ACR" in subject:
-                PHANTOM = True
+
 
             USE_ADMIN_CONFIG = True
             if RESOURCE_CONFIG:
@@ -551,7 +586,7 @@ try:
                     DEFACEJSON = t1wpath.split(".nii")[0] + "_deface.json"
                     deface_command = "pydeface --force {} --outfile {}".format(t1wpath, DEFAULTDEFACE).split()
 
-                if not BYPASS_DEFACE:
+                if not BYPASS_DEFACE and not PHANTOM:
                     logtext(LOGFILE,"Executing command: " + " ".join(deface_command))
                     logtext(LOGFILE,subprocess.check_output(deface_command))
 
@@ -790,12 +825,12 @@ try:
                     logtext (LOGFILE, "%s already exists. Will back it up and then delete it." % CONFIG_RESOURCE_FOLDER )
                     backupLoc = backupProjectFolder(project,workflowId,CONFIG_RESOURCE_FOLDER , "backup_" + CONFIG_RESOURCE_FOLDER , LOGFILE, LOGFILENAME,host,sess)
                     logtext (LOGFILE, "moved  " + CONFIG_RESOURCE_FOLDER + " to " + backupLoc)
-                    deleteFolder("/data/projects/%s/resources/%s" % (project,CONFIG_RESOURCE_FOLDER), LOGFILE,sess)     
+                    deleteFolder(workflowId,"/data/projects/%s/resources/%s" % (project,CONFIG_RESOURCE_FOLDER), LOGFILE,host, sess)     
                 uploadfiles (workflowId , "CONFIG_JSON", "CONFIG_FILES" ,"CONFIG", CONFIGFOLDER, "/data/projects/%s/resources/%s/files" % (project,CONFIG_RESOURCE_FOLDER_COPY),host , sess,uploadByRef,args)
 
             if resourceExists and overwrite and not BYPASS_CONFIG:
                 logtext(LOGFILE, 'Deleting existing %s folder for %s' % (BIDS_RESOURCE_FOLDER, session))
-                deleteFolder("/data/experiments/%s/resources/%s" % (session,BIDS_RESOURCE_FOLDER) , LOGFILE, host,sess)
+                deleteFolder(workflowId, "/data/experiments/%s/resources/%s" % (session,BIDS_RESOURCE_FOLDER) , LOGFILE, host,sess)
 
             logtext(LOGFILE, 'Uploading BIDS files for session %s to location %s' % (session,BIDS_RESOURCE_FOLDER))
             LOGFILE.flush()
@@ -809,7 +844,7 @@ try:
 
 
     # perform miscellaneous file operations
-    if 'eddyqc' in proc_steps:
+    if 'eddyqc' in proc_steps and not PHANTOM:
         os.chdir("/tmp")
 
         # find step-specific parameters
@@ -925,16 +960,171 @@ try:
 
                 print ('Running eddy for session %s: \n%s' % (session, eddy_command))
                 os.system(eddy_command)
-        
+         
               
                 # Uploading EDDYQC files
+                if resourceExists and overwrite:
+                    logtext(LOGFILE, 'Deleting existing %s folder for %s' % (EDDYQC_RESOURCE_FOLDER, session))
+                    deleteFolder(workflowId, "/data/experiments/%s/resources/%s" % (session,EDDYQC_RESOURCE_FOLDER) , LOGFILE, host,sess)
+
                 print ('Uploading EDDYQC files for session %s.' % session)
                 uploadfiles (workflowId , "EDDYQC_NIFTI", "EDDYQC_FILES" ,"EDDYQC", eddyQCOutdir, "/data/experiments/%s/resources/%s/files" % (session,EDDYQC_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
+                if cleanup and checkSessionResource(EDDYQC_RESOURCE_FOLDER, session, host,sess):
+                    logtext (LOGFILE, 'Cleaning up %s directory.' % EDDYQCFOLDER)
+                    rmtree(EDDYQCFOLDER)
 
         else:
             message = 'Looks like EDDYQC has already been run for session %s. If you want to rerun then set overwrite flag to True.' % session
             print (message)
             logtext (LOGFILE, message)
+
+    if 'phantomqc' in proc_steps and not PHANTOM:
+        message = 'phantomqc in processing steps but subject {} not identified as a phantom. phantom names are {}'.format(subject, str(PHANTOM_NAMES))
+        logtext (LOGFILE, message)
+
+
+    if 'phantomqc' in proc_steps and PHANTOM: 
+        os.chdir("/tmp")
+
+        # find step-specific parameters
+        step_info=''
+        proc_steps_list=proc_steps.split(",")
+        for step_item in proc_steps_list:
+            if 'phantomqc:' in step_item:
+                step_info = step_item
+                break
+
+        # add functionality to change these if necessary
+        PHANTOM_BASE_ANAT='base'
+        PHANTOM_BASE_FUNC='base'
+        PHANTOM_BASE_ROI='anat_rois.tsv'
+        PHANTOM_FUNC_ROI='func_rois.tsv'
+        n_procs = 3
+
+        PHANTOMQCFOLDER=os.path.join(niftidir,PHANTOMQC_RESOURCE_FOLDER)
+        if not os.access(PHANTOMQCFOLDER, os.R_OK):
+            os.mkdir(PHANTOMQCFOLDER)
+
+        resourceExists = checkSessionResource(PHANTOMQC_RESOURCE_FOLDER, session, host,sess)
+        if not resourceExists or overwrite:
+
+            if checkSessionResource(BIDS_RESOURCE_FOLDER, session, host,sess):
+                if not os.listdir(sessionBidsDir) or overwrite:
+                    bidsprepare(project, session, sessionBidsDir,BIDS_RESOURCE_FOLDER,host,sess)
+
+                phantomroidir=os.path.join(PHANTOMQCFOLDER,'roidir')
+                if not os.path.isdir( phantomroidir):
+                    os.mkdir(phantomroidir)
+
+                if checkProjectResource(PHANTOMROI_RESOURCE_FOLDER, project, host,sess):
+        
+                    filesDownloaded=downloadProjectfiles(PHANTOMROI_RESOURCE_FOLDER, project, phantomroidir, True, host , sess)
+        
+                    layout = BIDSLayout(sessionBidsDir)
+        
+                    anatfile_current=layout.get(suffix='T1w',extension='nii.gz')[0].path
+                    funcfile_current=layout.get(task='rest',extension='nii.gz')[0].path
+                    anat_current_datetime = layout.get_metadata(anatfile_current)["AcquisitionDateTime"]
+                    func_current_datetime = layout.get_metadata(funcfile_current)["AcquisitionDateTime"]
+        
+                    anatfile_base=glob.glob(os.path.join(phantomroidir,'*ses-{}*T1w*.nii.gz'.format(PHANTOM_BASE_ANAT)))[0]
+                    funcfile_base=glob.glob(os.path.join(phantomroidir,'*ses-{}*task-rest*bold*.nii.gz'.format(PHANTOM_BASE_FUNC)))[0]
+
+
+                    # workflow root name
+                    wf_root='acrmed_qc_wf'
+                               
+                    # base outputdir
+                    output_dir=os.path.join(PHANTOMQCFOLDER,'outputdir')
+                    if not os.path.isdir( output_dir):
+                        os.mkdir(output_dir)
+                
+                    # Run anatomical pipeline on current session using base rois
+                    prefix='anat_current'
+                    wf_name='{}_{}'.format(prefix,wf_root)
+                
+                    #split out signal and noise masks
+                    base_anat_roi=os.path.join(phantomroidir, PHANTOM_BASE_ROI)
+                    with open(base_anat_roi) as f:
+                        lines = f.readlines()
+                
+                    signal_roi_list = []
+                    noise_roi_list = []
+                    index=0
+                    for roi in lines:
+                       signal_roi = roi.split()[0]
+                       noise_roi = roi.split()[1]
+                       signal_roi_list.insert(index, signal_roi)
+                       noise_roi_list.insert(index, noise_roi)
+                       index=index+1
+                
+                    current_anat_wf = create_anat_wf(wf_name,output_dir,anatfile_current, anatfile_base, signal_roi_list, noise_roi_list, phantomroidir, prefix)
+                    current_anat_wf.write_graph(graph2use='flat')
+                    res_anat = current_anat_wf.run('MultiProc', plugin_args={'n_procs': n_procs})
+                    ###################################################### 
+                    # get anatomical json
+                    anat_report_json = collateAnatJson(lines,output_dir, wf_name, anat_current_datetime)   
+                
+                    # Run functional pipeline on current session using base rois
+                    prefix='func_current'
+                    wf_name='{}_{}'.format(prefix,wf_root)
+
+                    #split out signal and noise masks
+                    base_func_roi=os.path.join(phantomroidir, PHANTOM_FUNC_ROI)
+                    with open(base_func_roi) as f:
+                        lines = f.readlines()
+                
+                    signal_roi_list = []
+                    noise_roi_list = []
+                    index=0
+                    for roi in lines:
+                       signal_roi = roi.split()[0]
+                       noise_roi = roi.split()[1]
+                       signal_roi_list.insert(index, signal_roi)
+                       noise_roi_list.insert(index, noise_roi)
+                       index=index+1
+                
+                    current_func_wf = create_func_wf(wf_name,output_dir,funcfile_current, funcfile_base, signal_roi_list, noise_roi_list, phantomroidir, prefix)
+                    current_func_wf.write_graph(graph2use='flat')
+                    res_func = current_func_wf.run('MultiProc', plugin_args={'n_procs': n_procs})
+                
+                    logtext(LOGFILE, "Completed Phantom Processing Pipeline.")
+                    #########################################################################
+                    # get functional  json
+                    func_report_json = collateFuncJson(lines,output_dir, wf_name, func_current_datetime)
+                
+                    ## save final report
+                    final_report_json={}
+                    final_report_json["structural"]=anat_report_json["structural"]
+                    final_report_json["functional"]=func_report_json["functional"]
+                    final_report_file = os.path.join(output_dir, "{}_{}_finalreport.json".format(subject, session))
+                    with open(final_report_file, 'w') as outfile:
+                        json.dump(final_report_json, outfile, indent=2)
+
+                    # Uploading PHANTOMQC files
+                    if resourceExists and overwrite:
+                        logtext(LOGFILE, 'Deleting existing %s folder for %s' % (PHANTOMQC_RESOURCE_FOLDER, session))
+                        deleteFolder(workflowId,"/data/experiments/%s/resources/%s" % (session,PHANTOMQC_RESOURCE_FOLDER) , LOGFILE, host,sess)
+
+                    logtext (LOGFILE, 'Uploading PHANTOMQC files for session %s.' % session)
+                    uploadfiles (workflowId , "PHANTOMQC_NIFTI", "PHANTOMQC_FILES" ,"PHANTOMQC", output_dir, "/data/experiments/%s/resources/%s/files" % (session,PHANTOMQC_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
+                    if cleanup and checkSessionResource(BIDS_RESOURCE_FOLDER, session, host,sess):
+                        logtext (LOGFILE, 'Cleaning up %s directory.' % PHANTOMQCFOLDER)
+                        rmtree(PHANTOMQCFOLDER)
+
+
+                else:
+                    message = '[ERROR: phantomqc ] phantom roi  files have not been created yet for  project %s. These need to be uploaded manually.' % project
+                    logtext (LOGFILE, message)
+            else:
+                message = '[ERROR: phantomqc ] Bids files have not been created yet for  %s. Run bidsconvert then rerun.' % subject
+                logtext (LOGFILE, message)
+              
+
+        else:
+            message = 'Looks like Phantom QC  has already been run for session %s. If you want to rerun then set overwrite flag to True.' % session
+            logtext (LOGFILE, message)
+
 
     if 'filetools' in proc_steps: 
     # Get list of scan ids
@@ -964,7 +1154,7 @@ try:
                             if OUTPUT_FOLDER:
                                 moveLoc = backupFolder(session,workflowId,INPUT_FOLDER, OUTPUT_FOLDER, LOGFILE, LOGFILENAME,host,sess)
                                 logtext (LOGFILE, "moved  " + INPUT_FOLDER + " to " + moveLoc)
-                                deleteFolder("/data/experiments/%s/resources/%s" % (session,INPUT_FOLDER), LOGFILE,sess)                    
+                                deleteFolder(workflowId,"/data/experiments/%s/resources/%s" % (session,INPUT_FOLDER), LOGFILE,host, sess)                    
                             else:
                                 logtext (LOGFILE,'Output destination not defined. Cannot move.')
                         else:
@@ -1031,7 +1221,8 @@ finally:
         LOGFILE.flush()
         try: 
             downloadSessionfiles (LOG_RESOURCE_FOLDER, session, LOGFOLDER, True, host,sess)
-            deleteFolder("/data/experiments/%s/resources/%s" % (session,LOG_RESOURCE_FOLDER), LOGFILE ,sess)
+            if checkSessionResource(LOG_RESOURCE_FOLDER, session, host,sess):
+            	deleteFolder(workflowId,"/data/experiments/%s/resources/%s" % (session,LOG_RESOURCE_FOLDER), LOGFILE ,host, sess)
             uploadfiles (workflowId , "LOG_TXT", "LOG_FILES" ,"LOG", LOGFOLDER, "/data/experiments/%s/resources/%s/files" % (session,LOG_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
         except Exception as e:
             logtext (LOGFILE, 'Exception thrown in Finally Block.')

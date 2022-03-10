@@ -1,0 +1,144 @@
+{
+  "name": "bidsconvert_aacazxnat_qcsession-xnat-0.1",
+  "description": "Run QC pipeline for bidsconvert only at session level.",
+  "version": "0.1",
+  "schema-version": "1.0",
+  "image": "aacazxnat/qcsession-xnat:0.1",
+  "type": "docker",
+  "command-line": "python /src/qcsession-xnat.py #SESSION_ID# #OVERWRITE# #SESSION_LABEL# --host $XNAT_HOST --user $XNAT_USER --pass $XNAT_PASS --upload-by-ref False --cleanup True --proc_steps '#PROC_STEPS#' --dicomdir /dicom --niftidir /nifti",
+  "override-entrypoint": true,
+  "mounts": [
+    {
+      "name": "nifti",
+      "writable": true,
+      "path": "/nifti"
+    }
+  ],
+  "environment-variables": {},
+  "ports": {},
+  "inputs": [
+    {
+      "name": "session_id",
+      "label": null,
+      "description": "XNAT ID of the session",
+      "type": "string",
+      "matcher": null,
+      "default-value": null,
+      "required": true,
+      "replacement-key": "#SESSION_ID#",
+      "sensitive": null,
+      "command-line-flag": "--session",
+      "command-line-separator": null,
+      "true-value": null,
+      "false-value": null,
+      "select-values": [],
+      "multiple-delimiter": null
+    },
+    {
+      "name": "overwrite",
+      "label": null,
+      "description": "Overwrite any existing NIFTI and BIDS scan resources?",
+      "type": "boolean",
+      "matcher": null,
+      "default-value": "true",
+      "required": false,
+      "replacement-key": "#OVERWRITE#",
+      "sensitive": null,
+      "command-line-flag": "--overwrite",
+      "command-line-separator": null,
+      "true-value": "True",
+      "false-value": "False",
+      "select-values": [],
+      "multiple-delimiter": null
+    },
+    {
+      "name": "session_label",
+      "label": null,
+      "description": "session label to use instead of default",
+      "type": "string",
+      "matcher": null,
+      "default-value": null,
+      "required": false,
+      "replacement-key": "#SESSION_LABEL#",
+      "sensitive": null,
+      "command-line-flag": "--session_label",
+      "command-line-separator": null,
+      "true-value": null,
+      "false-value": null,
+      "select-values": [],
+      "multiple-delimiter": null
+    },
+    {
+      "name": "proc_steps",
+      "label": null,
+      "description": "additional processing steps",
+      "type": "string",
+      "matcher": null,
+      "default-value": null,
+      "required": false,
+      "replacement-key": "#PROC_STEPS#",
+      "sensitive": null,
+      "command-line-flag": null,
+      "command-line-separator": null,
+      "true-value": null,
+      "false-value": null,
+      "select-values": [],
+      "multiple-delimiter": null
+    }
+  ],
+  "outputs": [],
+  "xnat": [
+    {
+      "name": "xnat_bidsconvert_aacazxnat_qcsession-0.1",
+      "label": null,
+      "description": "Run QC pipeline at session level for bidsconvert only using aacazxnat/qcsession-xnat:0.1",
+      "contexts": [
+        "xnat:imageSessionData"
+      ],
+      "external-inputs": [
+        {
+          "name": "session",
+          "label": null,
+          "description": "Input session",
+          "type": "Session",
+          "matcher": null,
+          "default-value": null,
+          "required": true,
+          "replacement-key": null,
+          "sensitive": null,
+          "provides-value-for-command-input": null,
+          "provides-files-for-command-mount": null,
+          "via-setup-command": null,
+          "user-settable": null,
+          "load-children": true
+        }
+      ],
+      "derived-inputs": [
+        {
+          "name": "session-id",
+          "label": null,
+          "description": "The session's id",
+          "type": "string",
+          "matcher": null,
+          "default-value": null,
+          "required": true,
+          "replacement-key": null,
+          "sensitive": null,
+          "provides-value-for-command-input": "session_id",
+          "provides-files-for-command-mount": null,
+          "user-settable": null,
+          "load-children": true,
+          "derived-from-wrapper-input": "session",
+          "derived-from-xnat-object-property": "id",
+          "via-setup-command": null,
+          "multiple": false,
+          "parser": null
+        }
+      ],
+      "output-handlers": []
+    }
+  ],
+  "container-labels": {},
+  "generic-resources": {},
+  "ulimits": {}
+}

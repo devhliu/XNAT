@@ -122,7 +122,8 @@ ENV PATH=/opt/mrtrix3/bin:$PATH
 # copy in source code
 WORKDIR /src
 COPY ./qcsession-xnat.py /src
-COPY ./xnatutils /src/xnatutils
+ADD xnatutils.gz /src
+ENV PATH="/src/:$PATH"
 
 # Best practices
 RUN ldconfig

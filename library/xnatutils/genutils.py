@@ -16,6 +16,8 @@ import requests.packages.urllib3
 requests.packages.urllib3.disable_warnings()
 import datetime
 
+BIDSVERSION = "1.0.0"
+
 def cleanServer(server):
     server.strip()
     if server[-1] == '/':
