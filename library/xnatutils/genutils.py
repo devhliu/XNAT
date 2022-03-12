@@ -443,7 +443,7 @@ def downloadSubjectfiles (collectionFolder, project, subject, outputDir, doit, h
                         print("PROBLEM downloading {}. This file has been skipped.".format(resName))
     return bidsTreeList
 
-def downloadSubjectSessionfiles (collectionFolder, project, subject, outputDir, doit, host,sess,bump=False):
+def downloadSubjectSessionfiles (collectionFolder, project, subject, outputDir, doit, host,sess,bump=False,target=None,exactmatch=False,refdate=None):
     if not os.path.isdir(outputDir):
         os.mkdir(outputDir)
     bidsTreeList=[]
@@ -456,35 +456,40 @@ def downloadSubjectSessionfiles (collectionFolder, project, subject, outputDir, 
         if sessionSubject[0] != subject:
             continue
 
+        sessionDateString = sessionListValue['date']
+        sessionDateVals=sessionDateString.split("-")
+        sessionDate= datetime.datetime(int(sessionDateVals[0]),int(sessionDateVals[1]),int(sessionDateVals[2]))
 
-        resourceList=get(sess,host + "/data/experiments/%s/files" % sessionAccession, params={"format": "json"})
-        resourceListJson = resourceList.json()["ResultSet"]["Result"]
-        for resourceListValue in resourceListJson:
-            resCollection = resourceListValue['collection']
-            resURI = resourceListValue['URI']
-            resourceListValue['URI'] = host+resourceListValue['URI']
-            resName = resourceListValue['Name']
-            resCat_ID = resourceListValue['cat_ID']
-            resourceListValue['absolutePath']=''
+        if (refdate is None) or (sessionDate <= refdate):
+            resourceList=get(sess,host + "/data/experiments/%s/files" % sessionAccession, params={"format": "json"})
+            resourceListJson = resourceList.json()["ResultSet"]["Result"]
+            for resourceListValue in resourceListJson:
+                resCollection = resourceListValue['collection']
+                resURI = resourceListValue['URI']
+                resourceListValue['URI'] = host+resourceListValue['URI']
+                resName = resourceListValue['Name']
+                resCat_ID = resourceListValue['cat_ID']
+                resourceListValue['absolutePath']=''
 
-            bidsTree=resURI.split(resCat_ID + '/files/')[1]
-            bidsTreeFolders=bidsTree.split('/')
-            if  bidsTreeFolders[-1] == resName:
-                if resCollection == collectionFolder:
-                    if bump:
-                        bidsTreeFolders.insert(0,sessionAccession)
-                    bidsTreeList.append('/'.join(bidsTreeFolders))
-                    newdir=outputDir
-                    if doit:
-                        for dir in bidsTreeFolders[0:-1]:
-                            newdir=os.path.join(newdir,dir)
-                            if not os.path.isdir(newdir):
-                                os.mkdir(newdir)
-                        os.chdir(newdir)
-                        try:
-                            download(resName,resourceListValue,sess)
-                        except:
-                            print("PROBLEM downloading {}. This file has been skipped.".format(resName))
+                bidsTree=resURI.split(resCat_ID + '/files/')[1]
+                bidsTreeFolders=bidsTree.split('/')
+                if  bidsTreeFolders[-1] == resName:
+                    if resCollection == collectionFolder:
+                        if (target is None) or (exactmatch and resName == target) or (not exactmatch and target in resName):
+                            if bump:
+                                bidsTreeFolders.insert(0,sessionAccession)
+                            bidsTreeList.append('/'.join(bidsTreeFolders))
+                            newdir=outputDir
+                            if doit:
+                                for dir in bidsTreeFolders[0:-1]:
+                                    newdir=os.path.join(newdir,dir)
+                                    if not os.path.isdir(newdir):
+                                        os.mkdir(newdir)
+                                os.chdir(newdir)
+                                try:
+                                    download(resName,resourceListValue,sess)
+                                except:
+                                    print("PROBLEM downloading {}. This file has been skipped.".format(resName))
     return bidsTreeList
 
 
@@ -606,7 +611,7 @@ def startSession(user,password):
     return sess
 
 def getProjectFromSession(sess, session, host):
-    r = get(sess, host + "/data/experiments/%s" % session, params={"format": "json", "handler": "values", "columns": "project,subject_ID"})
+    r = get(sess, host + "/data/experiments/%s" % session, params={"format": "json", "handler": "values", "columns": "project"})
     sessionValuesJson = r.json()["ResultSet"]["Result"][0]
     project = sessionValuesJson["project"]
     return project
@@ -617,11 +622,16 @@ def getSubjectFromSession(sess, session, host):
     sessionValuesJson = r.json()["ResultSet"]["Result"][0]
     subjectID = sessionValuesJson["subject_ID"]
     
-    r = get(sess, host + "/data/subjects/%s" % subjectID, params={"format": "json", "handler": "values", "columns": "label"})
-    subjectLabel = r.json()["ResultSet"]["Result"][0]["label"]  
+    subjectLabel=getSubjectLabelFromSubject(sess,subjectID,host)
     returnvalue.append(subjectID)
     returnvalue.append(subjectLabel)
     return returnvalue
+
+def getSubjectLabelFromSubject(sess,subject,host):
+    r = get(sess, host + "/data/subjects/%s" % subject, params={"format": "json", "handler": "values", "columns": "label"})
+    subjectLabel = r.json()["ResultSet"]["Result"][0]["label"]
+    return subjectLabel
+
 
 def getSessionLabel(sess, session,host):
     r = get(sess, host + "/data/experiments/%s" % session, params={"format": "json", "handler": "values", "columns": "label"})

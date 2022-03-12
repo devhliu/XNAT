@@ -32,6 +32,9 @@ transferdir/
 downloadedFiles/
 testupload/
 test/
+code_snippets/
+PhantomROITest/
+*_backup*.py
 
 # Distribution / packaging
 .Python

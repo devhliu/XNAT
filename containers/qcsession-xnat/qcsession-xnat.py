@@ -1,5 +1,7 @@
 from xnatutils.genutils import *
 from xnatutils.phantomdefs import *
+from xnatutils.phantomReports import *
+from xnatutils.standalone_html import *
 from shutil import copytree
 from bids import BIDSLayout
 import nibabel as nib
@@ -91,46 +93,43 @@ LOGFILENAME = os.path.join(LOGFOLDER,LOGFILENAME)
 LOGFILE = open(LOGFILENAME,'w+')
 
 # Set up session
-sess = requests.Session()
-sess.verify = False
-sess.auth = (args.user, args.password)
+sess = startSession(args.user,args.password)
 
-if project is None or subject is None:
-    # Get project ID and subject ID from session JSON
-    logtext (LOGFILE,"Get project and subject ID for session ID %s." % session)
-    r = get(sess, host + "/data/experiments/%s" % session, params={"format": "json", "handler": "values", "columns": "project,subject_ID"})
-    sessionValuesJson = r.json()["ResultSet"]["Result"][0]
-    project = sessionValuesJson["project"] if project is None else project
-    subjectID = sessionValuesJson["subject_ID"]
-    logtext (LOGFILE,"Project: " + project)
-    logtext (LOGFILE,"Subject ID: " + subjectID)
+if project is None:
+    logtext (LOGFILE,"Get project for session ID %s." % session)
+    project = getProjectFromSession(sess, session, host)
+logtext (LOGFILE,"Project: " + project)
 
-    if subject is None:
-        print 
-        logtext (LOGFILE,"Get subject label for subject ID %s." % subjectID)
-        r = get(sess, host + "/data/subjects/%s" % subjectID, params={"format": "json", "handler": "values", "columns": "label"})
-        subject = r.json()["ResultSet"]["Result"][0]["label"]
-        logtext (LOGFILE,"Subject label: " + subject)
+if subject is None:
+    logtext (LOGFILE,"Get subject ID and subject Label for session ID %s." % session)
+    subjectvals = getSubjectFromSession(sess, session, host)
+    subject = subjectvals[0]
+    subject_label = subjectvals[1]
+else:
+    subject_label = getSubjectLabelFromSubject(sess,subject,host)
+    
+logtext (LOGFILE,"Subject ID: " + subject)
+logtext (LOGFILE,"Subject Label: " + subject_label)
 
 # Make Subject bids compatible - 10/23/2021 CU
-subject=subject.replace('_','')
+bids_subject_label = subject_label
+bids_subject_label=bids_subject_label.replace('_','')
 # ensure that hyphens not present in session label - 11/10/2021 CU
-subject=subject.replace('-','')
+bids_subject_label=bids_subject_label.replace('-','')
+logtext (LOGFILE,"BIDS Subject Label: " + bids_subject_label)
 
-session_label_all = session_label
-if session_label is None:
-    # get session label
-    r = get(sess, host + "/data/experiments/%s" % session, params={"format": "json", "handler": "values", "columns": "label"})
-    sessionValuesJson = r.json()["ResultSet"]["Result"][0]
-    session_label_all = sessionValuesJson["label"]
+bids_session_label = session_label
+session_label = getSessionLabel(sess, session,host)
+logtext (LOGFILE,"Session Label: " + session_label)
+
+if bids_session_label is None or isspace(bids_session_label):   
     # Now default to the last tag instead of the first - 10/23/2021 CU
-    session_label = session_label_all.split('_')[-1]
-    # ensure that hyphens not present in session label - 11/10/2021 CU
-    session_label = session_label.replace('-','')
-else:
-    # ensure that hyphens and underscore not present in session label - 11/10/2021 CU
-    session_label = session_label.replace('_','')
-    session_label = session_label.replace('-','')
+    bids_session_label = session_label.split('_')[-1]
+
+# ensure that hyphens and underscore not present in session label - 11/10/2021 CU
+bids_session_label = bids_session_label.replace('_','')
+bids_session_label = bids_session_label.replace('-','')
+logtext (LOGFILE,"BIDS Session Label: " + bids_session_label)
 
     
 subdicomdir = os.path.join(dicomdir, subject)
@@ -139,17 +138,17 @@ if not os.path.isdir(subdicomdir):
     os.mkdir(subdicomdir)
         
 #make dicom dir unique - might not be truly necessary
-sesdicomdir = os.path.join(subdicomdir, session_label_all)
+sesdicomdir = os.path.join(subdicomdir, session)
 if not os.path.isdir(sesdicomdir):
     logtext (LOGFILE,'creating DICOM/subject/session directory %s.' % sesdicomdir)
     os.mkdir(sesdicomdir)
 
-subjectBidsDir=os.path.join(bidsdir,subject)
+subjectBidsDir=os.path.join(bidsdir,bids_subject_label)
 if not os.path.isdir(subjectBidsDir):
     logtext (LOGFILE,'creating BIDS/subject directory %s.' % subjectBidsDir)
     os.mkdir(subjectBidsDir)
 
-sessionBidsDir=os.path.join(subjectBidsDir,session_label)
+sessionBidsDir=os.path.join(subjectBidsDir,bids_session_label)
 if not os.path.isdir(sessionBidsDir):
     logtext (LOGFILE,'creating BIDS/subject/session directory %s.' % sessionBidsDir)
     os.mkdir(sessionBidsDir)
@@ -157,6 +156,8 @@ if not os.path.isdir(sessionBidsDir):
 
 # massive try block to fail gracefully
 try:
+    # CPU 2/15/2022 - provode functionlaity to non-anonymize phantom bids json
+    PHANTOM = False
 
     PHANTOM_NAMES = [ 'ACR']
     # Download and convert Dicoms to BIDS format
@@ -183,11 +184,28 @@ try:
                     commandInput=step_info.split(SUBSTEPOUT)[1].split(':')[0]
                     PHANTOM_NAMES=commandInput.split('|')
 
-    # CPU 2/15/2022 - provode functionlaity to non-anonymize phantom bids json
-    PHANTOM = False
+        SUBSTEP=':isphantom'
+        if SUBSTEP in step_info:
+            PHANTOM=True
+            logtext (LOGFILE,'initialisation:isphantom override set. Phantom pipeline will be run.')
+
+        # number of records to display in phantom report
+        MAXRECS = 3
+        SUBSTEP=':maxrecs'
+        SUBSTEPOUT=SUBSTEP + '='
+        if SUBSTEP in step_info:
+            if SUBSTEPOUT in step_info:
+                if step_info.split(SUBSTEPOUT)[1]:
+                    MAXRECS=int(step_info.split(SUBSTEPOUT)[1].split(':')[0].strip())
+                    logtext (LOGFILE,'initialisation:maxrecs display %s records in phantom report.' % (str(MAXRECS)))
+                else:
+                    logtext (LOGFILE,'initialisation:maxrecs parameter missing optional location information. Using default value %s.' % (str(MAXRECS)))
+
+
     for PHANTOM_NAME in PHANTOM_NAMES:
-        if PHANTOM_NAME in subject:
+        if PHANTOM_NAME in subject_label:
             PHANTOM = True
+            logtext (LOGFILE,'initialisation:phantomnames phantom match found for {} in {}. Phantom pipeline will be run.'.format(PHANTOM_NAME,subject_label))
             break
 
     # Download and convert Dicoms to BIDS format
@@ -254,7 +272,7 @@ try:
             sessionBidsDir = subjectBidsDir
             logtext (LOGFILE,'No session specified. creating BIDS output at directory %s.' % sessionBidsDir)
         else:
-            sessionBidsDir=os.path.join(subjectBidsDir,"ses-"+session_label)
+            sessionBidsDir=os.path.join(subjectBidsDir,"ses-"+bids_session_label)
             if not os.path.isdir(sessionBidsDir):
                 logtext (LOGFILE,'creating BIDS/subject/session directory %s.' % sessionBidsDir)
                 os.mkdir(sessionBidsDir)
@@ -532,14 +550,14 @@ try:
             if DO_CONFIG and not BYPASS_CONFIG:
                 if overwrite:
                     if NOSESSION:
-                        dcm2bids_command = "dcm2bids -d {} -p {} -c {} -o {} --clobber".format(sesdicomdir, subject, dcm2bids_config, sessionBidsDir ).split()
+                        dcm2bids_command = "dcm2bids -d {} -p {} -c {} -o {} --clobber".format(sesdicomdir, bids_subject_label, dcm2bids_config, sessionBidsDir ).split()
                     else:
-                        dcm2bids_command = "dcm2bids -d {} -p {} -s {} -c {} -o {} --clobber".format(sesdicomdir, subject, session_label, dcm2bids_config, sessionBidsDir ).split()
+                        dcm2bids_command = "dcm2bids -d {} -p {} -s {} -c {} -o {} --clobber".format(sesdicomdir, bids_subject_label, bids_session_label, dcm2bids_config, sessionBidsDir ).split()
                 else:
                     if NOSESSION:
-                        dcm2bids_command = "dcm2bids -d {} -p {} -c {} -o {}".format(sesdicomdir, subject, dcm2bids_config, sessionBidsDir ).split()
+                        dcm2bids_command = "dcm2bids -d {} -p {} -c {} -o {}".format(sesdicomdir, bids_subject_label, dcm2bids_config, sessionBidsDir ).split()
                     else:
-                        dcm2bids_command = "dcm2bids -d {} -p {} -s {} -c {} -o {}".format(sesdicomdir, subject, session_label, dcm2bids_config, sessionBidsDir ).split()
+                        dcm2bids_command = "dcm2bids -d {} -p {} -s {} -c {} -o {}".format(sesdicomdir, bids_subject_label, bids_session_label, dcm2bids_config, sessionBidsDir ).split()
                 logtext(LOGFILE, ' '.join(dcm2bids_command))
                 logtext(LOGFILE, str(subprocess.check_output(dcm2bids_command)))
          
@@ -677,14 +695,14 @@ try:
                             subjectValue=subjectbids[0].split('-')[1]
                             entities['subject']=subjectValue
                         else:
-                            entities['subject']=subject
+                            entities['subject']=bids_subject_label
 
                         sessionbids=list(filter(lambda x: "ses-" in x, labels))
                         if sessionbids:
                             sessionValue=sessionbids[0].split('-')[1]
                             entities['session']=sessionValue
                         elif not NOSESSION:
-                            entities['session']=session_label
+                            entities['session']=bids_session_label
 
                         task=list(filter(lambda x: "task-" in x, labels))
                         if task:
@@ -703,9 +721,9 @@ try:
 
                     except KeyError:
                         customLabels= None
-                        entities['subject']=subject
+                        entities['subject']=bids_subject_label
                         if not NOSESSION:
-                            entities['session']=session_label
+                            entities['session']=bids_session_label
 
                     files = layout.get(return_type='file', **entities)
                     if files:
@@ -728,7 +746,7 @@ try:
                         logtext (LOGFILE, 'No Destination provided for copy')
 
                     if destination and sourcefile and sourcejson:
-                        entities['subject']=subject
+                        entities['subject']=bids_subject_label
                         try:
                             dataType = destination["dataType"]
                             entities['datatype']=dataType
@@ -979,7 +997,7 @@ try:
             logtext (LOGFILE, message)
 
     if 'phantomqc' in proc_steps and not PHANTOM:
-        message = 'phantomqc in processing steps but subject {} not identified as a phantom. phantom names are {}'.format(subject, str(PHANTOM_NAMES))
+        message = 'phantomqc in processing steps but Subject Label {} not identified as a phantom. phantom names are {}'.format(subject_label, str(PHANTOM_NAMES))
         logtext (LOGFILE, message)
 
 
@@ -1097,9 +1115,57 @@ try:
                     final_report_json={}
                     final_report_json["structural"]=anat_report_json["structural"]
                     final_report_json["functional"]=func_report_json["functional"]
-                    final_report_file = os.path.join(output_dir, "{}_{}_finalreport.json".format(subject, session))
+                    final_report_file = os.path.join(output_dir, "{}_{}_finalreport.json".format(subject_label, session_label))
                     with open(final_report_file, 'w') as outfile:
                         json.dump(final_report_json, outfile, indent=2)
+
+
+                    # generate html report
+                    logtext (LOGFILE,"Get session specific information for %s." % session)
+                    sessionRequest = get(sess, host + "/data/experiments/%s" % session, params={"format":"json","handler": "values" , "columns": "Date"})
+                    sessionDateString = sessionRequest.json()["ResultSet"]["Result"][0]["Date"]
+
+                    report_dir=os.path.join(PHANTOMQCFOLDER,'reportdir')
+                    if not os.path.isdir( report_dir):
+                        os.mkdir(report_dir)
+
+                    report_json_dir=os.path.join(PHANTOMQCFOLDER,'jsons')
+                    if not os.path.isdir( report_json_dir):
+                        os.mkdir(report_json_dir)
+
+                    report_image_dir=os.path.join(report_dir,'images')
+                    if not os.path.isdir( report_image_dir):
+                        os.mkdir(report_image_dir)
+
+
+                    refdt = datetime.datetime.strptime(sessionDateString,'%Y-%m-%d')
+                    filedown = downloadSubjectSessionfiles (PHANTOMQC_RESOURCE_FOLDER, project, subject, report_json_dir, True, host,sess,bump=True,target="finalreport.json",exactmatch=False, refdate=refdt)
+                    reportjson = glob.glob(os.path.join(report_json_dir,'*/*.json'))
+
+                    reportexists = [ ele for ele in reportjson if session in ele ]
+                    if len(reportexists) == 0:
+                        reportjson.append(final_report_file)
+                    reportdict = getSortedReportSet(reportjson, MAXRECS)
+
+                    style_source = "/src/style.css"
+                    style_dest = os.path.join(report_dir,'style.css')
+                    fileCopy(style_source,style_dest)
+
+                    CURRENTDIR=os.getcwd()
+                    os.chdir(report_dir)
+
+                    doc = createPhantomQCReport(MAXRECS,'./style.css', './images', reportdict)
+
+                    final_report_html = os.path.join(report_dir, "{}_{}_phantom_finalreport.html".format(subject_label, session_label))
+                    final_report_inline_html = os.path.join(output_dir, "{}_{}_phantom_finalreport_inline.html".format(subject_label, session_label))
+                    with open(final_report_html, 'w') as file:
+                        file.write(doc.render())
+                    make_html_images_inline(final_report_html, final_report_inline_html)
+
+                    os.chdir(CURRENTDIR)
+
+                    copytree(report_dir, os.path.join(output_dir, 'htmlreport'))
+
 
                     # Uploading PHANTOMQC files
                     if resourceExists and overwrite:
@@ -1124,6 +1190,8 @@ try:
         else:
             message = 'Looks like Phantom QC  has already been run for session %s. If you want to rerun then set overwrite flag to True.' % session
             logtext (LOGFILE, message)
+
+
 
 
     if 'filetools' in proc_steps: 
