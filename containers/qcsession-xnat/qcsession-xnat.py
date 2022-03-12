@@ -1142,9 +1142,12 @@ try:
                     filedown = downloadSubjectSessionfiles (PHANTOMQC_RESOURCE_FOLDER, project, subject, report_json_dir, True, host,sess,bump=True,target="finalreport.json",exactmatch=False, refdate=refdt)
                     reportjson = glob.glob(os.path.join(report_json_dir,'*/*.json'))
 
-                    reportexists = [ ele for ele in reportjson if session in ele ]
+                    reportexists = [ ind  for ind, ele in enumerate(reportjson) if session in ele ]
                     if len(reportexists) == 0:
                         reportjson.append(final_report_file)
+                    else:
+                    	reportjson[reportexists[0]]=final_report_file
+
                     reportdict = getSortedReportSet(reportjson, MAXRECS)
 
                     style_source = "/src/style.css"
@@ -1154,7 +1157,8 @@ try:
                     CURRENTDIR=os.getcwd()
                     os.chdir(report_dir)
 
-                    doc = createPhantomQCReport(MAXRECS,'./style.css', './images', reportdict)
+                    reportcurr = getSortedReportSet([final_report_file], 1)
+                    doc = createPhantomQCReport(MAXRECS,'./style.css', './images', reportdict, reportcurr)
 
                     final_report_html = os.path.join(report_dir, "{}_{}_phantom_finalreport.html".format(subject_label, session_label))
                     final_report_inline_html = os.path.join(output_dir, "{}_{}_phantom_finalreport_inline.html".format(subject_label, session_label))

@@ -220,8 +220,8 @@ def createSNRSection(doc,reportdict,modality,imagedir,reportcurr):
 
     if reportcurr is not None:
         d = div()
-        captiontext=("{} ROIs used for average SNR".format(modality))
-        d += h3(captiontext)
+        captiontext="{} ROIs used for average SNR".format(modality).capitalize()
+        d += h3(captiontext,id='{}_snr_roi_display_h'.format(modality))
         snr_table_data = getSnrData(reportcurr,modality)
         snr_df = pd.DataFrame(snr_table_data, columns=table_columns)
         # tsnr is duplicated across rois! just just pick firts one
@@ -252,8 +252,8 @@ def createSNRSection(doc,reportdict,modality,imagedir,reportcurr):
     # cycle through dates
     grouped=new_df.groupby(['roi'])
     d = div()
-    captiontext=("{} SNR Table grouped by ROI".format(modality))
-    d += h3(captiontext)
+    captiontext=("{} SNR Table grouped by ROI".format(modality).capitalize())
+    d += h3(captiontext,id='{}_snr_table_h'.format(modality))
     for name, group in grouped:
         snrlist=group.values.tolist()
         d += create_float_table('{}_snr_table'.format(modality), 'snr-table', table_columns, snrlist)
@@ -299,8 +299,8 @@ def createGeometrySection(doc,reportdict,modality,imagedir):
     table_columns=['date','field', 'value','average_values']
     grouped=new_df.groupby(['field'])
     d = div()
-    captiontext=("{} Geometry Tables obtained from affine transform to base ROI".format(modality))
-    d += h3(captiontext)
+    captiontext=("{} Geometry Tables obtained from affine transform to base {}".format(modality,modality).capitalize())
+    d += h3(captiontext,id='{}_geometry_table_h'.format(modality))
     for name, group in grouped:
         geomlist=group.values.tolist()
         d += create_float_table('{}_geometry_table'.format(modality), 'geometry-table', table_columns, geomlist)
@@ -333,11 +333,11 @@ def createTSNRSection(doc,reportdict,modality,imagedir, reportcurr=None):
         tsnr_file = tsnr_df['tsnr_file'].iloc[0]
         tsnrorthoimage=os.path.join(imagedir,"func_tsnr_ortho.png")
         writeStatImage(tsnr_file, tsnrorthoimage, 'tiled')
-        doc = add_image(doc, '{}_tsnr_display'.format(modality), None, 'TSNR overview', tsnrorthoimage)
+        doc = add_image(doc, '{}_tsnr_overview'.format(modality), None, 'TSNR overview', tsnrorthoimage)
 
         d = div()
-        captiontext=("{} ROIs used for average TSNR".format(modality))
-        d += h3(captiontext)
+        captiontext=("{} ROIs used for average TSNR".format(modality).capitalize())
+        d += h3(captiontext,id='{}_tsnr_roi_display_h'.format(modality))
         # add roi related to tsnr
         grouped=tsnr_df.groupby(['roi'])
         for roinum, group in grouped:
@@ -362,8 +362,8 @@ def createTSNRSection(doc,reportdict,modality,imagedir, reportcurr=None):
     # cycle through dates
     grouped=new_df.groupby(['roi'])
     d = div()
-    captiontext=("{} TSNR Table grouped by ROI".format(modality))
-    d += h3(captiontext)
+    captiontext=("{} TSNR Table grouped by ROI".format(modality).capitalize())
+    d += h3(captiontext,id='{}_tsnr_table_h'.format(modality))
     for name, group in grouped:
         tsnrlist=group.values.tolist()
         d += create_float_table('{}_tsnr_table'.format(modality), 'snr-table', table_columns, tsnrlist)
@@ -395,13 +395,13 @@ def createPhantomQCReport(MAXRECS,stylesheet, imagedir, reportdict, reportcurr=N
             li(a('Structural QC',href='#structuralqc'))
             nested=ul()
             with nested:
-                for i in ['structural_roi_display', 'structural_snr_table', 'structural_snr_plot','structural_geometry_table','structural_geometry_plot']:
-                    li(a(i.title(), href='#%s' % i))
+                for i in ['structural_snr_roi_display_h', 'structural_snr_table_h', 'structural_snr_plot','structural_geometry_table_h','structural_geometry_plot']:
+                    li(a(i.replace('_h','').replace('_',' ').title(), href='#%s' % i))
             li(a('Functional QC',href='#functionalqc'))
             nested=ul()
             with nested:
-                for i in [ 'functional_tsnr_display', 'functional_tsnr_roi_display', 'functional_tsnr_table', 'functional_tsnr_plot', 'functional_snr_roi_display', 'functional_snr_table', 'functional_snr_plot']:
-                    li(a(i.title(), href='#%s' % i))
+                for i in [ 'functional_tsnr_overview', 'functional_tsnr_roi_display_h', 'functional_tsnr_table_h', 'functional_tsnr_plot', 'functional_snr_roi_display_h', 'functional_snr_table_h', 'functional_snr_plot']:
+                    li(a(i.replace('_h','').replace('_',' ').title(), href='#%s' % i))
 
     doc += hr()
     doc = create_section(doc, 'structuralqc', None, 'Structural QC')
