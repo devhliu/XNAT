@@ -367,13 +367,13 @@ def downloadProjectfile (collectionFolder, project, outputDir, target, doit, ret
                                 bidsTreeList.append(bidsTree)
                                 newdir=outputDir
                                 if doit:
-                                        if retainFolderTree:
-                                            for dir in bidsTreeFolders[0:-1]:
-                                                    newdir=os.path.join(newdir,dir)
-                                                    if not os.path.isdir(newdir):
-                                                            os.mkdir(newdir)
-                                        os.chdir(newdir)
-                                        download(resName,resourceListValue,sess)
+                                    if retainFolderTree:
+                                        for dir in bidsTreeFolders[0:-1]:
+                                                newdir=os.path.join(newdir,dir)
+                                                if not os.path.isdir(newdir):
+                                                        os.mkdir(newdir)
+                                    os.chdir(newdir)
+                                    download(resName,resourceListValue,sess)
         return bidsTreeList
 
 
@@ -493,20 +493,86 @@ def downloadSubjectSessionfiles (collectionFolder, project, subject, outputDir, 
     return bidsTreeList
 
 
+def downloadAllSessionfilesFiltered (collectionFolder, project, outputDir, doit, host,sess,bump=False,target=None,exactmatch=False,refdate=None,retainFolderTree=False,exactFolder=None):
+
+    if exactFolder is not None:
+        bump = True
+        exactMatch = False
+        target = None
+        retainFolderTree = True
+
+
+    if not os.path.isdir(outputDir):
+         os.mkdir(outputDir)
+    bidsTreeList=[]
+    #obtain all the sessions for a project
+    sessionList = get(sess,host + "/data/projects/%s/experiments" %project, params={"format":"json"})
+    sessionListJson = sessionList.json()["ResultSet"]["Result"]
+    for sessionListValue in sessionListJson:
+        sessionAccession = sessionListValue['ID']
+
+        sessionDateString = sessionListValue['date']
+        sessionDateVals=sessionDateString.split("-")
+        sessionDate= datetime.datetime(int(sessionDateVals[0]),int(sessionDateVals[1]),int(sessionDateVals[2]))
+
+        if (refdate is None) or (sessionDate <= refdate):
+            resourceList=get(sess,host + "/data/experiments/%s/files" % sessionAccession, params={"format": "json"})
+            resourceListJson = resourceList.json()["ResultSet"]["Result"]
+            for resourceListValue in resourceListJson:
+                resCollection = resourceListValue['collection']
+                resURI = resourceListValue['URI']
+                resourceListValue['URI'] = host+resourceListValue['URI']
+                resName = resourceListValue['Name']
+                resCat_ID = resourceListValue['cat_ID']
+                resourceListValue['absolutePath']=''
+
+                bidsTree=resURI.split(resCat_ID + '/files/')[1]
+                bidsTreeFolders=bidsTree.split('/')
+                if resCollection == collectionFolder:
+                    if  bidsTreeFolders[-1] == resName:
+                        folderLoc = [ ind  for ind, ele in enumerate(bidsTreeFolders[0:-1]) if  ele == exactFolder ]
+                        if (target is None and exactFolder is None) or (exactmatch and resName == target) or (not exactmatch and target is not None and target in resName) or (len(folderLoc) > 0 and exactFolder is not None):
+                            if bump:
+                                bidsTreeFolders.insert(0,sessionAccession)
+                            bidsTreeList.append('/'.join(bidsTreeFolders))
+                            newdir=outputDir
+                            if doit:
+                                if retainFolderTree:
+                                    for dir in bidsTreeFolders[0:-1]:
+                                        newdir=os.path.join(newdir,dir)
+                                        if not os.path.isdir(newdir):
+                                            os.mkdir(newdir)
+                                elif bump:
+                                    newdir=os.path.join(newdir,sessionAccession)
+                                    if not os.path.isdir(newdir):
+                                        os.mkdir(newdir)
+
+                                os.chdir(newdir)
+                                try:
+                                    download(resName,resourceListValue,sess)
+                                except:
+                                    print("PROBLEM downloading {}. This file has been skipped.".format(resName))
+
+    return bidsTreeList
+
 #copy down BIDS file for project
 def getBids(project, bidsDir, bidsFolder, host, sess,overwrite=True):
 
     if not os.path.exists(bidsDir):
         os.mkdir(bidsDir)
 
+    filesDownloaded=[]
+
     if not os.listdir(bidsDir) or overwrite:
-        filesDownloaded= downloadAllSessionfiles (bidsFolder, project, bidsDir, True, host,sess)
+        filesDownloaded = downloadAllSessionfiles (bidsFolder, project, bidsDir, True, host,sess)
     # remove all log files
     loggingfiles = glob.glob(os.path.join(bidsDir,"*.log"))
     for loggingfile in loggingfiles:
         os.remove(loggingfile)
 
     createDatasetDescription(bidsDir, project)
+
+    return filesDownloaded
    
 
 # copy down the BIDS files for just this session

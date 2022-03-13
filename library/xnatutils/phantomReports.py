@@ -215,7 +215,7 @@ def writeStatImage(threeDfile, image, dmode='ortho'):
     display=plotting.plot_stat_map(threeDfile, display_mode=dmode)
     display.savefig(image)  
 
-def createSNRSection(doc,reportdict,modality,imagedir,reportcurr):
+def createSNRSection(doc,reportdict,modality,imagedir,reportcurr=None):
     table_columns=['datetime','roi', 'snr', 'signal_roi', 'noise_roi', 'in_file']
 
     if reportcurr is not None:
@@ -280,6 +280,35 @@ def createSNRSection(doc,reportdict,modality,imagedir,reportcurr):
     doc = add_image(doc, '{}_snr_plot'.format(modality), None, 'Plot of {} SNR'.format(modality), snrimage)
     return doc
 
+def createSNRGroupSection(doc,reportdict,modality,imagedir,reportcurr=None):
+    table_columns=['datetime','roi', 'snr', 'signal_roi', 'noise_roi', 'in_file']
+    table_data = getSnrData(reportdict,modality)
+    df = pd.DataFrame(table_data, columns=table_columns)
+    df['date']=df.apply(lambda row: formatDateTime(row,'%Y-%m-%d'), axis=1)
+
+    table_columns=['date','roi', 'snr']
+    new_df = df[table_columns]
+    plot_df = new_df.sort_values(by=['date'])
+    plot_df.reset_index(drop=True, inplace=True)
+
+    grouped=plot_df.groupby(['roi'])
+    for name, group in grouped:
+        group.reset_index(drop=True, inplace=True)
+
+        sns.relplot(
+            data=group, kind="line",
+            x="date", y="snr", col="roi", marker="o",
+            facet_kws=dict(sharex=False),
+        )
+
+        if modality == "structural":
+            snrimage=os.path.join(imagedir,"struct_snr_{}.png".format(name))
+        else:
+            snrimage=os.path.join(imagedir,"func_snr_{}.png".format(name))
+        plt.savefig(snrimage)    
+        doc = add_image(doc, '{}_snr_group_plot'.format(modality), None, 'Plot of {} SNR for roi {}'.format(modality,name), snrimage)
+    return doc
+
 def createGeometrySection(doc,reportdict,modality,imagedir):
     table_columns=['datetime','field','value']
     table_data = getGeometryData(reportdict, modality)
@@ -321,6 +350,39 @@ def createGeometrySection(doc,reportdict,modality,imagedir):
     geomimage=os.path.join(imagedir,"struct_geom.png")
     plt.savefig(geomimage)
     doc = add_image(doc, '{}_geometry_plot'.format(modality), None, 'Plot of {} Geometry'.format(modality), geomimage)
+    return doc
+
+
+def createGeometryGroupSection(doc,reportdict,modality,imagedir):
+    table_columns=['datetime','field','value']
+    table_data = getGeometryData(reportdict, modality)
+    df = pd.DataFrame(table_data, columns=table_columns)
+
+    df['date']=df.apply(lambda row: formatDateTime(row,'%Y-%m-%d'), axis=1)
+    table_columns=['date','field', 'value']
+    new_df = df[table_columns]
+
+    new_df['average_values']=new_df.apply(lambda row: returnAverage(row), axis=1)
+    new_df_index=new_df.set_index("field")
+    new_df_index=new_df_index.drop("average_scaling")
+    new_df_index=new_df_index.reset_index()
+
+    plot_df = new_df_index.sort_values(by=['date'])
+    plot_df.reset_index(drop=True, inplace=True)
+
+    grouped=plot_df.groupby(['field'])
+    for name, group in grouped:
+        group.reset_index(drop=True, inplace=True)
+        sns.relplot(
+            data=group, kind="line",
+            x="date", y="average_values", col="field",  marker="o",
+            facet_kws=dict(sharex=False),
+        )  
+
+        geomimage=os.path.join(imagedir,"struct_group_geom_{}.png".format(name))
+        plt.savefig(geomimage)
+        doc = add_image(doc, '{}_geometry_group_plot'.format(modality), None, 'Plot of {} Geometry for {}'.format(modality,name), geomimage)
+
     return doc
 
 def createTSNRSection(doc,reportdict,modality,imagedir, reportcurr=None):
@@ -387,7 +449,35 @@ def createTSNRSection(doc,reportdict,modality,imagedir, reportcurr=None):
     doc = add_image(doc, '{}_tsnr_plot'.format(modality), None, 'Plot of {} TSNR'.format(modality), tsnrimage)
     return doc
 
-def createPhantomQCReport(MAXRECS,stylesheet, imagedir, reportdict, reportcurr=None):
+def createTSNRGroupSection(doc,reportdict,modality,imagedir):
+    table_columns=['datetime','roi', 'tsnr_in_roi', 'tsnr_file', 'signal_roi']
+    table_data = getTsnrData(reportdict,modality)
+    df = pd.DataFrame(table_data, columns=table_columns)
+    df['date']=df.apply(lambda row: formatDateTime(row,'%Y-%m-%d'), axis=1)
+
+    table_columns=['date','roi', 'tsnr_in_roi']
+    new_df = df[table_columns]
+
+    plot_df = new_df.sort_values(by=['date'])
+    plot_df.reset_index(drop=True, inplace=True)
+  
+
+    grouped=plot_df.groupby(['roi'])
+    for name, group in grouped:
+        group.reset_index(drop=True, inplace=True)
+
+        sns.relplot(
+            data=group, kind="line",
+            x="date", y="tsnr_in_roi", col="roi", marker="o",
+            facet_kws=dict(sharex=False),
+        )
+
+        tsnrimage=os.path.join(imagedir,"func_group_tsnr_{}.png".format(name))
+        plt.savefig(tsnrimage)    
+        doc = add_image(doc, '{}_tsnr_group_plot'.format(modality), None, 'Plot of {} TSNR for roi {}'.format(modality,name), tsnrimage)
+    return doc
+
+def createPhantomQCReport(stylesheet, imagedir, reportdict, reportcurr=None):
     doc = create_document('ACR Medium Phantom QC Report', stylesheet)
     with doc:
         with div(id='links').add(ul()):
@@ -419,24 +509,96 @@ def createPhantomQCReport(MAXRECS,stylesheet, imagedir, reportdict, reportcurr=N
 
     return doc
 
+
+
+def createPhantomGroupQCReport(stylesheet, imagedir, reportdict):
+    doc = create_document('ACR Medium Phantom Group QC Report', stylesheet)
+    with doc:
+        with div(id='links').add(ul()):
+            h2('Contents')
+            li(a('Structural QC',href='#structuralqc'))
+            nested=ul()
+            with nested:
+                for i in [  'structural_snr_group_plot','structural_geometry_group_plot']:
+                    li(a(i.replace('_h','').replace('_',' ').title(), href='#%s' % i))
+            li(a('Functional QC',href='#functionalqc'))
+            nested=ul()
+            with nested:
+                for i in [  'functional_tsnr_group_plot',  'functional_snr_group_plot']:
+                    li(a(i.replace('_h','').replace('_',' ').title(), href='#%s' % i))
+
+    doc += hr()
+    doc = create_section(doc, 'structuralqc', None, 'Structural QC')
+    doc += hr()
+    doc = createSNRGroupSection(doc,reportdict, "structural",imagedir)
+    doc += hr()
+    doc = createGeometryGroupSection(doc,reportdict, "structural",imagedir)
+    doc += hr()
+    doc = create_section(doc, 'functionalqc', None, 'Functional QC')
+    doc += hr()
+    doc = createTSNRGroupSection(doc,reportdict, "functional",imagedir)
+    doc += hr()
+    doc = createSNRGroupSection(doc,reportdict, "functional",imagedir)
+    doc += hr()
+    return doc
+
+def createGroupJson(reportdict, outputfile):
+    reportjson_dict={}
+    for keydate, rep in reportdict.items():
+        with open (rep, 'r') as file:
+            rep_json = json.load(file)
+        reportjson_dict[keydate]=rep_json
+
+    with open(outputfile, 'w') as outfile:
+        json.dump(reportjson_dict, outfile, indent=2)
+
+
+
 if __name__ == '__main__':
-  
+    import sys
     from standalone_html import *
+    from genutils import *
 
-    final_report_file_json = '/mnt/jsons/ACRMED_20220103_finalreport.json'
-    reportcurr = getSortedReportSet([final_report_file_json], 1)
+    TEST = sys.argv[1]
+    if TEST is None:
+        TEST = "default"
 
-    MAXRECS=3
-    report_json_dir='/mnt/jsons'
-    reportjson = glob.glob(os.path.join(report_json_dir,'*.json'))
-    reportdict = getSortedReportSet(reportjson, MAXRECS)
 
-    CURRENTDIR=os.getcwd()
-    os.chdir('/mnt')
+    if TEST == 'testa':
+        final_report_file_json = '/mnt/jsons/ACRMED_20220103_finalreport.json'
+        reportcurr = getSortedReportSet([final_report_file_json], 1)
 
-    doc = createPhantomQCReport(MAXRECS,'./style.css', './images', reportdict, reportcurr)
-    final_report_html = '/mnt/final.html'
-    final_report_inline_html = '/mnt/final_inline.html'
-    with open(final_report_html, 'w') as file:
-        file.write(doc.render())
-    make_html_images_inline(final_report_html, final_report_inline_html)
+        MAXRECS=3
+        report_json_dir='/mnt/jsons'
+        reportjson = glob.glob(os.path.join(report_json_dir,'*.json'))
+        reportdict = getSortedReportSet(reportjson, MAXRECS)
+
+        CURRENTDIR=os.getcwd()
+        os.chdir('/mnt')
+
+        doc = createPhantomQCReport('./style.css', './images', reportdict, reportcurr)
+        final_report_html = '/mnt/final.html'
+        final_report_inline_html = '/mnt/final_inline.html'
+        with open(final_report_html, 'w') as file:
+            file.write(doc.render())
+        make_html_images_inline(final_report_html, final_report_inline_html)
+
+
+    if TEST == 'testb':
+        MAXRECS=3
+        report_json_dir='/mnt/jsons'
+        reportjson = glob.glob(os.path.join(report_json_dir,'*.json'))
+        reportdict = getSortedReportSet(reportjson, MAXRECS)
+        fullgroupjson=os.path.join('/mnt', "{}_{}_phantom_groupfinalreport.json".format("ACRMED","20220102"))
+        createGroupJson(reportdict, fullgroupjson)
+
+
+        CURRENTDIR=os.getcwd()
+        os.chdir('/mnt')
+
+        doc = createPhantomGroupQCReport('./style.css', './images', reportdict)
+        final_report_html = '/mnt/final_group.html'
+        final_report_inline_html = '/mnt/final_group_inline.html'
+        with open(final_report_html, 'w') as file:
+            file.write(doc.render())
+        make_html_images_inline(final_report_html, final_report_inline_html)

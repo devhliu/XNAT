@@ -1,4 +1,7 @@
 from xnatutils.genutils import *
+from xnatutils.phantomdefs import *
+from xnatutils.phantomReports import *
+from xnatutils.standalone_html import *
 from shutil import copytree
 from bids import BIDSLayout
 import nibabel as nib
@@ -53,13 +56,20 @@ bidsdir = niftidir + "/BIDS"
 if not os.access(bidsdir, os.R_OK):
     os.mkdir(bidsdir)
 
+
 BIDS_RESOURCE_FOLDER='BIDS-AACAZ'
 LOG_RESOURCE_FOLDER='LOGS-AACAZ'
 CONFIG_RESOURCE_FOLDER='CONFIG-AACAZ'
 EDDYQC_RESOURCE_FOLDER='EDDYQC-AACAZ'
-EDDYQC_PROJECT_RESOURCE_FOLDER='EDDYQC-AACAZ-GROUP'
 MRIQC_RESOURCE_FOLDER='MRIQC-AACAZ'
+FMRIPREP_RESOURCE_FOLDER='FMRIPREP-AACAZ'
+QSIPREP_RESOURCE_FOLDER='QSIPREP-AACAZ'
+PHANTOMROI_RESOURCE_FOLDER='PHANTOMROI-AACAZ'
+PHANTOMQC_RESOURCE_FOLDER='PHANTOMQC-AACAZ'
+
+EDDYQC_PROJECT_RESOURCE_FOLDER='EDDYQC-AACAZ-GROUP'
 MRIQC_PROJECT_RESOURCE_FOLDER='MRIQC-AACAZ-GROUP'
+PHANTOMQC_PROJECT_RESOURCE_FOLDER='PHANTOMQC-AACAZ-GROUP'
 
 LOGFOLDER=os.path.join(niftidir,LOG_RESOURCE_FOLDER)
 if not os.access(LOGFOLDER, os.R_OK):
@@ -85,6 +95,36 @@ FSLICENSE=os.path.join('/src','license.txt')
 
 # massive try block to fail gracefully
 try:
+    MAXRECS=10
+    CURRSTEP='initialisation'
+    if CURRSTEP in proc_steps:  
+        os.chdir("/tmp")
+
+        # find step-specific parameters
+        step_info=''
+        proc_steps_list=proc_steps.split(",")
+        for step_item in proc_steps_list:
+            if CURRSTEP in step_item:
+                step_info = step_item
+                break
+
+        # number of records to display in phantom report
+        SUBSTEP=':maxrecs'
+        SUBSTEPOUT=SUBSTEP + '='
+        if SUBSTEP in step_info:
+            if SUBSTEPOUT in step_info:
+                if step_info.split(SUBSTEPOUT)[1]:
+                    maxrecstring = step_info.split(SUBSTEPOUT)[1].split(':')[0].strip()
+                    if maxrecstring.isnumeric():
+                        MAXRECS=int(maxrecstring)
+                        logtext (LOGFILE,'initialisation:maxrecs display %s records in phantom report.' % (str(MAXRECS)))
+                    else:
+                        logtext (LOGFILE,'initialisation:maxrecs display is non numeric %s. Returning all records' % (maxrecstring))
+                        MAXRECS = None
+
+                else:
+                    logtext (LOGFILE,'initialisation:maxrecs parameter missing optional location information. Using default value %s.' % (str(MAXRECS)))
+
 
     # group eddy qc
     if 'eddyqcgroup' in proc_steps:
@@ -112,7 +152,8 @@ try:
             if os.path.exists(eddygroupdir):
                 rmtree(eddygroupdir)
 
-            filesDownloaded = downloadAllSessionfiles (EDDYQC_RESOURCE_FOLDER, project, eddyquaddir, True,host,sess,True)     
+            filesDownloaded = downloadAllSessionfilesFiltered(EDDYQC_RESOURCE_FOLDER, project, eddyquaddir,True, host, sess, False, None, False, None, True, 'quad')
+            
             quadfolders=os.path.join(eddyquaddir,'quad_folders.txt')
 
             eddyQuadDirs=''
@@ -127,6 +168,12 @@ try:
             eddysquad_command = "eddy_squad {} -o {}".format(quadfolders, eddygroupdir).split() 
             logtext(LOGFILE, ' '.join(eddysquad_command))
             logtext(LOGFILE, str(subprocess.check_output(eddysquad_command)))
+
+            # Uploading EDDYQC files
+            if resourceExists and overwrite:
+                logtext(LOGFILE, 'Deleting existing %s folder for project %s' % (EDDYQC_PROJECT_RESOURCE_FOLDER, project))
+                deleteFolder(workflowId, "/data/projects/%s/resources/%s" % (project,EDDYQC_PROJECT_RESOURCE_FOLDER) , LOGFILE, host,sess)
+
                 
             # Uploading Group EDDYQC files
             print ('Uploading EDDYQC files for project %s.' % project)
@@ -167,17 +214,106 @@ try:
             if not os.path.isdir(projectBidsDir):
                 os.mkdir(projectBidsDir)
 
-            bidsfilesDownloaded = downloadAllSessionfiles (BIDS_RESOURCE_FOLDER, project, projectBidsDir, True,host,sess,False)
+            bidsfilesDownloaded = getBids(project, projectBidsDir, BIDS_RESOURCE_FOLDER, host, sess)
             mriqcfilesDownloaded = downloadAllSessionfiles (MRIQC_RESOURCE_FOLDER, project, mriqcOutdir, True,host,sess,False)
             mriqc_command = "mriqc {} {} group {}".format(projectBidsDir, mriqcOutdir, mriqc_params).split() 
             logtext(LOGFILE, subprocess.check_output(mriqc_command))
 
+            # Uploading EDDYQC files
+            if resourceExists and overwrite:
+                logtext(LOGFILE, 'Deleting existing %s folder for project %s' % (MRIQC_PROJECT_RESOURCE_FOLDER, project))
+                deleteFolder(workflowId, "/data/projects/%s/resources/%s" % (project,MRIQC_PROJECT_RESOURCE_FOLDER) , LOGFILE, host,sess)
 
             # Uploading MRIQC files
             logtext(LOGFILE,'Uploading group MRIQC files for project %s' % project)
             uploadfiles (workflowId , "MRIQC_NIFTI", "MRIQC_FILES" ,"MRIQC",mriqcOutdir, "/data/projects/%s/resources/%s/files" % (project, MRIQC_PROJECT_RESOURCE_FOLDER),host,sess,uploadByRef,args )
+        else:
+            message = 'Looks like MRIQC has already been run for project %s. If you want to rerun then set overwrite flag to True.' % project
+            print (message)
+            logtext (LOGFILE, message)
 
+    if 'phantomqcgroup' in proc_steps: 
 
+        os.chdir("/tmp")
+
+        # find step-specific parameters
+        step_info=''
+        proc_steps_list=proc_steps.split(",")
+        for step_item in proc_steps_list:
+            if 'phantomqc:' in step_item:
+                step_info = step_item
+                break
+
+        PHANTOMQCGROUPFOLDER=os.path.join(niftidir,PHANTOMQC_PROJECT_RESOURCE_FOLDER)
+        if not os.access(PHANTOMQCGROUPFOLDER, os.R_OK):
+            os.mkdir(PHANTOMQCGROUPFOLDER)
+
+        resourceExists = checkProjectResource(PHANTOMQC_PROJECT_RESOURCE_FOLDER, project, host,sess)
+        if not resourceExists or overwrite:
+
+            output_dir=os.path.join(PHANTOMQCGROUPFOLDER,'outputdir')
+            if not os.path.isdir( output_dir):
+                os.mkdir(output_dir)
+
+            report_dir=os.path.join(PHANTOMQCGROUPFOLDER,'reportdir')
+            if not os.path.isdir( report_dir):
+                os.mkdir(report_dir)
+
+            report_json_dir=os.path.join(PHANTOMQCGROUPFOLDER,'jsons')
+            if not os.path.isdir( report_json_dir):
+                os.mkdir(report_json_dir)
+
+            report_image_dir=os.path.join(report_dir,'images')
+            if not os.path.isdir( report_image_dir):
+                os.mkdir(report_image_dir)
+
+            filesDownloaded = downloadAllSessionfilesFiltered (PHANTOMQC_RESOURCE_FOLDER, project, report_json_dir, True, host,sess,bump=True,target="finalreport.json",exactmatch=False, refdate=None, retainFolderTree=False)
+
+            reportjson = [os.path.join(report_json_dir, s) for s in filesDownloaded if 'finalreport.json' in s]
+
+            if len(reportjson) > 0:
+
+                reportdict = getSortedReportSet(reportjson, MAXRECS)
+
+                fullgroupjson=os.path.join(output_dir, "{}_phantom_groupfinalreport.json".format(project))
+                createGroupJson(reportdict, fullgroupjson)
+
+                style_source = "/src/style.css"
+                style_dest = os.path.join(report_dir,'style.css')
+                fileCopy(style_source,style_dest)
+
+                CURRENTDIR=os.getcwd()
+                os.chdir(report_dir)
+
+                doc = createPhantomGroupQCReport('./style.css', './images', reportdict)
+
+                final_report_html = os.path.join(report_dir, "{}_phantom_groupfinalreport.html".format(project))
+                final_report_inline_html = os.path.join(output_dir, "{}_phantom_groupfinalreport_inline.html".format(project))
+                with open(final_report_html, 'w') as file:
+                    file.write(doc.render())
+                make_html_images_inline(final_report_html, final_report_inline_html)
+
+                os.chdir(CURRENTDIR)
+
+                copytree(report_dir, os.path.join(output_dir, 'htmlreport'))
+
+                # Uploading PHANTOMQC files
+                if resourceExists and overwrite:
+                    logtext(LOGFILE, 'Deleting existing %s folder for project %s' % (PHANTOMQC_PROJECT_RESOURCE_FOLDER, project))
+                    deleteFolder(workflowId, "/data/projects/%s/resources/%s" % (project,PHANTOMQC_PROJECT_RESOURCE_FOLDER) , LOGFILE, host,sess)
+
+                logtext(LOGFILE,'Uploading group PHANTOMQC files for project %s' % project)
+                uploadfiles (workflowId , "PHANTOMQC_NIFTI", "PHANTOMQC_FILES" ,"PHANTOMQC",output_dir, "/data/projects/%s/resources/%s/files" % (project, PHANTOMQC_PROJECT_RESOURCE_FOLDER),host,sess,uploadByRef,args )
+                if cleanup and checkProjectResource(PHANTOMQC_PROJECT_RESOURCE_FOLDER, project, host,sess):
+                    logtext (LOGFILE, 'Cleaning up %s directory.' % PHANTOMQCGROUPFOLDER)
+                    rmtree(PHANTOMQCGROUPFOLDER)
+            else:
+                logtext(LOGFILE,'{} Json reports not found for any sessions in  {}'.format(PHANTOMQC_RESOURCE_FOLDER, project))
+
+        else:
+            message = 'Looks like PHANTOMQC has already been run for project %s. If you want to rerun then set overwrite flag to True.' % project
+            print (message)
+            logtext (LOGFILE, message)
 
     if 'filetools' in proc_steps: 
     # Get list of scan ids

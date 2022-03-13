@@ -119,10 +119,18 @@ RUN ./configure && \
 
 ENV PATH=/opt/mrtrix3/bin:$PATH
 
+# additional pip installs for phantom reports
+RUN pip install seaborn==0.11.2 \
+                dominate==2.6.0 \
+                beautifulsoup4==4.10.0
+               
+
 # copy in source code
 WORKDIR /src
 COPY ./qcproject-xnat.py /src
-COPY ./xnatutils /src/xnatutils
+COPY ./style.css /src
+ADD xnatutils.gz /src
+ENV PATH="/src/:$PATH"
 
 # Best practices
 RUN ldconfig

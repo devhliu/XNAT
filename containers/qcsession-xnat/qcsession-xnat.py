@@ -158,7 +158,7 @@ if not os.path.isdir(sessionBidsDir):
 try:
     # CPU 2/15/2022 - provode functionlaity to non-anonymize phantom bids json
     PHANTOM = False
-
+    MAXRECS = 3
     PHANTOM_NAMES = [ 'ACR']
     # Download and convert Dicoms to BIDS format
     CURRSTEP='initialisation'
@@ -190,7 +190,6 @@ try:
             logtext (LOGFILE,'initialisation:isphantom override set. Phantom pipeline will be run.')
 
         # number of records to display in phantom report
-        MAXRECS = 3
         SUBSTEP=':maxrecs'
         SUBSTEPOUT=SUBSTEP + '='
         if SUBSTEP in step_info:
@@ -1158,7 +1157,7 @@ try:
                     os.chdir(report_dir)
 
                     reportcurr = getSortedReportSet([final_report_file], 1)
-                    doc = createPhantomQCReport(MAXRECS,'./style.css', './images', reportdict, reportcurr)
+                    doc = createPhantomQCReport('./style.css', './images', reportdict, reportcurr)
 
                     final_report_html = os.path.join(report_dir, "{}_{}_phantom_finalreport.html".format(subject_label, session_label))
                     final_report_inline_html = os.path.join(output_dir, "{}_{}_phantom_finalreport_inline.html".format(subject_label, session_label))
@@ -1178,7 +1177,7 @@ try:
 
                     logtext (LOGFILE, 'Uploading PHANTOMQC files for session %s.' % session)
                     uploadfiles (workflowId , "PHANTOMQC_NIFTI", "PHANTOMQC_FILES" ,"PHANTOMQC", output_dir, "/data/experiments/%s/resources/%s/files" % (session,PHANTOMQC_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
-                    if cleanup and checkSessionResource(BIDS_RESOURCE_FOLDER, session, host,sess):
+                    if cleanup and checkSessionResource(PHANTOMQC_RESOURCE_FOLDER, session, host,sess):
                         logtext (LOGFILE, 'Cleaning up %s directory.' % PHANTOMQCFOLDER)
                         rmtree(PHANTOMQCFOLDER)
 
