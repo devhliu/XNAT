@@ -10,7 +10,7 @@ import argparse
 
 BIDSVERSION = "1.0.0"
 
-parser = argparse.ArgumentParser(description="Run dcm2bids and pydeface on every file in a session")
+parser = argparse.ArgumentParser(description="Run XNAT QC Pipeline at Session Level")
 parser.add_argument("--host", default="https://cnda.wustl.edu", help="CNDA host", required=True)
 parser.add_argument("--user", help="CNDA username", required=True)
 parser.add_argument("--password", help="Password", required=True)
@@ -75,8 +75,12 @@ BIDS_RESOURCE_FOLDER='BIDS-AACAZ'
 LOG_RESOURCE_FOLDER='LOGS-AACAZ'
 CONFIG_RESOURCE_FOLDER='CONFIG-AACAZ'
 EDDYQC_RESOURCE_FOLDER='EDDYQC-AACAZ'
+MRIQC_RESOURCE_FOLDER='MRIQC-AACAZ'
+FMRIPREP_RESOURCE_FOLDER='FMRIPREP-AACAZ'
+QSIPREP_RESOURCE_FOLDER='QSIPREP-AACAZ'
 PHANTOMROI_RESOURCE_FOLDER='PHANTOMROI-AACAZ'
 PHANTOMQC_RESOURCE_FOLDER='PHANTOMQC-AACAZ'
+REPORTSQC_RESOURCE_FOLDER='REPORTSQC-AACAZ'
 
 LOGFOLDER=os.path.join(niftidir,LOG_RESOURCE_FOLDER)
 if not os.access(LOGFOLDER, os.R_OK):
@@ -859,7 +863,6 @@ try:
             logtext (LOGFILE, message)
 
 
-
     # perform miscellaneous file operations
     if 'eddyqc' in proc_steps and not PHANTOM:
         os.chdir("/tmp")
@@ -1145,7 +1148,7 @@ try:
                     if len(reportexists) == 0:
                         reportjson.append(final_report_file)
                     else:
-                    	reportjson[reportexists[0]]=final_report_file
+                        reportjson[reportexists[0]]=final_report_file
 
                     reportdict = getSortedReportSet(reportjson, MAXRECS)
 
@@ -1194,6 +1197,136 @@ try:
             message = 'Looks like Phantom QC  has already been run for session %s. If you want to rerun then set overwrite flag to True.' % session
             logtext (LOGFILE, message)
 
+
+    if 'qcreports' in proc_steps and not PHANTOM: 
+        os.chdir("/tmp")
+
+        # find step-specific parameters
+        step_info=''
+        proc_steps_list=proc_steps.split(",")
+        for step_item in proc_steps_list:
+            if 'qcreports:' in step_item:
+                step_info = step_item
+                break
+
+
+        REPORTSQCFOLDER=os.path.join(niftidir,REPORTSQC_RESOURCE_FOLDER)
+        if not os.access(REPORTSQCFOLDER, os.R_OK):
+            os.mkdir(REPORTSQCFOLDER)
+
+        resourceExists = checkSessionResource(REPORTSQC_RESOURCE_FOLDER, session, host,sess)
+        if not resourceExists or overwrite:
+
+            QCREPORT_INPUT=os.path.join(REPORTSQCFOLDER,'input')
+            if not os.path.isdir(QCREPORT_INPUT):
+                os.mkdir(QCREPORT_INPUT)
+
+            QCREPORT_OUTPUT =os.path.join(REPORTSQCFOLDER,'output')
+            if not os.path.isdir(QCREPORT_OUTPUT):
+                os.mkdir(QCREPORT_OUTPUT)
+
+            # convert qsiprep report
+            qsiprepReportInput=os.path.join(QCREPORT_INPUT,'qsiprep')
+            if not os.path.isdir( qsiprepReportInput):
+                os.mkdir(qsiprepReportInput)
+
+            qsiprepReportOutput =os.path.join(QCREPORT_OUTPUT,'qsiprep')
+            if not os.path.isdir( qsiprepReportOutput):
+                os.mkdir(qsiprepReportOutput)
+
+
+            if checkSessionResource(QSIPREP_RESOURCE_FOLDER, session, host,sess):
+                logtext (LOGFILE, 'Downloading files for QSIPREP report.' )
+                filesDownloaded1 = downloadSessionfilesFiltered(QSIPREP_RESOURCE_FOLDER, session, qsiprepReportInput,True, host, sess, bump=False, target=".html", exactmatch=False, retainFolderTree=True, exactFolder=None)
+                filesDownloaded2 = downloadSessionfilesFiltered(QSIPREP_RESOURCE_FOLDER, session, qsiprepReportInput,True, host, sess, bump=False, target=None, exactmatch=False, retainFolderTree=True, exactFolder='figures')
+
+                filesDownloaded = list(set(filesDownloaded1 + filesDownloaded2))
+
+                reportHtml = [os.path.join(qsiprepReportInput, s) for s in filesDownloaded if '{}.html'.format(bids_subject_label) in s]
+                if len(reportHtml) > 0:
+                    reportHtmlInput = reportHtml[0]
+                    reportHtmlInputDir = os.path.dirname(reportHtmlInput)
+                    reportHtmlOutput = os.path.join( qsiprepReportOutput,os.path.basename(reportHtmlInput).split('.html')[0] + '_qsiprep_inline.html')
+
+                    CURRENTDIR=os.getcwd()
+                    os.chdir(reportHtmlInputDir)
+
+                    logtext (LOGFILE, 'From {}, generate inline QSIPREP report {}.'.format(reportHtmlInput, reportHtmlOutput) )
+                    make_html_images_inline(reportHtmlInput, reportHtmlOutput)
+
+                    os.chdir(CURRENTDIR)
+
+            # convert fmriprep report
+            fmriprepReportInput=os.path.join(QCREPORT_INPUT,'fmriprep')
+            if not os.path.isdir( fmriprepReportInput):
+                os.mkdir(fmriprepReportInput)
+
+            fmriprepReportOutput =os.path.join(QCREPORT_OUTPUT,'fmriprep')
+            if not os.path.isdir( fmriprepReportOutput):
+                os.mkdir(fmriprepReportOutput)
+
+
+            if checkSessionResource(FMRIPREP_RESOURCE_FOLDER, session, host,sess):
+
+                logtext (LOGFILE, 'Downloading files for FMRIPREP report.' )
+
+                filesDownloaded1 = downloadSessionfilesFiltered(FMRIPREP_RESOURCE_FOLDER, session, fmriprepReportInput,True, host, sess, bump=False, target=".html", exactmatch=False, retainFolderTree=True, exactFolder=None)
+                filesDownloaded2 = downloadSessionfilesFiltered(FMRIPREP_RESOURCE_FOLDER, session, fmriprepReportInput,True, host, sess, bump=False, target=None, exactmatch=False, retainFolderTree=True, exactFolder='figures')
+
+                filesDownloaded = list(set(filesDownloaded1 + filesDownloaded2))
+
+                reportHtml = [os.path.join(fmriprepReportInput, s) for s in filesDownloaded if '{}.html'.format(bids_subject_label)  in s]
+                if len(reportHtml) > 0:
+                    reportHtmlInput = reportHtml[0]
+                    reportHtmlInputDir = os.path.dirname(reportHtmlInput)
+                    reportHtmlOutput = os.path.join( fmriprepReportOutput,os.path.basename(reportHtmlInput).split('.html')[0] + '_fmriprep_inline.html')
+
+                    CURRENTDIR=os.getcwd()
+                    os.chdir(reportHtmlInputDir)
+
+                    logtext (LOGFILE, 'From {}, generate inline FMRIPREP report {}.'.format(reportHtmlInput, reportHtmlOutput) )
+                    make_html_images_inline(reportHtmlInput, reportHtmlOutput)
+
+                    os.chdir(CURRENTDIR)
+
+            # just copy mriqc report - already inline
+            mriqcReportInput=os.path.join(QCREPORT_INPUT,'mriqc')
+            if not os.path.isdir( mriqcReportInput):
+                os.mkdir(mriqcReportInput)
+
+            mriqcReportOutput =os.path.join(QCREPORT_OUTPUT,'mriqc')
+            if not os.path.isdir( mriqcReportOutput):
+                os.mkdir(mriqcReportOutput)
+
+
+            if checkSessionResource(MRIQC_RESOURCE_FOLDER, session, host,sess):
+                logtext (LOGFILE, 'Downloading files for MRIQC report.' )
+                filesDownloaded = downloadSessionfilesFiltered(MRIQC_RESOURCE_FOLDER, session, mriqcReportInput,True, host, sess, bump=False, target=".html", exactmatch=False, retainFolderTree=True, exactFolder=None)
+                reportHtmlTemp = [os.path.join(mriqcReportInput, s) for s in filesDownloaded if '.html' in s]
+                reportHtml = [os.path.join(mriqcReportInput, s) for s in  reportHtmlTemp if 'CITATION' not in s]
+                for reportHtmlInput in reportHtml:
+                    reportHtmlInputDir = os.path.dirname(reportHtmlInput)
+                    reportHtmlOutput = os.path.join( mriqcReportOutput,os.path.basename(reportHtmlInput).split('.html')[0] + '_mriqc_inline.html')
+                    logtext (LOGFILE, 'copy MRIQC report {} to output dir as {}.'.format(reportHtmlInput,reportHtmlOutput))
+                    fileCopy(reportHtmlInput,reportHtmlOutput)
+
+            # Uploading PHANTOMQC files
+            if resourceExists and overwrite:
+                logtext(LOGFILE, 'Deleting existing %s folder for %s' % (REPORTSQC_RESOURCE_FOLDER, session))
+                deleteFolder(workflowId,"/data/experiments/%s/resources/%s" % (session,REPORTSQC_RESOURCE_FOLDER) , LOGFILE, host,sess)
+
+            logtext (LOGFILE, 'Uploading QC REPORT files for session %s.' % session)
+            uploadfiles (workflowId , "REPORTSQC_HTML", "REPORTSQC_FILES" ,"REPORTSQC", QCREPORT_OUTPUT, "/data/experiments/%s/resources/%s/files" % (session,REPORTSQC_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
+            if cleanup and checkSessionResource(REPORTSQC_RESOURCE_FOLDER, session, host,sess):
+                logtext (LOGFILE, 'Cleaning up %s directory.' % REPORTSQCFOLDER)
+                rmtree(REPORTSQCFOLDER)
+
+
+        else:
+            message = 'Looks like Reports QC  has already been run for session %s. If you want to rerun then set overwrite flag to True.' % session
+            logtext (LOGFILE, message)
+
+        
 
 
 
@@ -1293,7 +1426,7 @@ finally:
         try: 
             downloadSessionfiles (LOG_RESOURCE_FOLDER, session, LOGFOLDER, True, host,sess)
             if checkSessionResource(LOG_RESOURCE_FOLDER, session, host,sess):
-            	deleteFolder(workflowId,"/data/experiments/%s/resources/%s" % (session,LOG_RESOURCE_FOLDER), LOGFILE ,host, sess)
+                deleteFolder(workflowId,"/data/experiments/%s/resources/%s" % (session,LOG_RESOURCE_FOLDER), LOGFILE ,host, sess)
             uploadfiles (workflowId , "LOG_TXT", "LOG_FILES" ,"LOG", LOGFOLDER, "/data/experiments/%s/resources/%s/files" % (session,LOG_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
         except Exception as e:
             logtext (LOGFILE, 'Exception thrown in Finally Block.')

@@ -10,7 +10,7 @@ import argparse
 
 BIDSVERSION = "1.0.0"
 
-parser = argparse.ArgumentParser(description="Run dcm2bids and pydeface on every file in a session")
+parser = argparse.ArgumentParser(description="Run XNAT QC Pipeline at Project Level")
 parser.add_argument("--host", default="https://cnda.wustl.edu", help="CNDA host", required=True)
 parser.add_argument("--user", help="CNDA username", required=True)
 parser.add_argument("--password", help="Password", required=True)
@@ -152,7 +152,7 @@ try:
             if os.path.exists(eddygroupdir):
                 rmtree(eddygroupdir)
 
-            filesDownloaded = downloadAllSessionfilesFiltered(EDDYQC_RESOURCE_FOLDER, project, eddyquaddir,True, host, sess, False, None, False, None, True, 'quad')
+            filesDownloaded = downloadAllSessionfilesFiltered(EDDYQC_RESOURCE_FOLDER, project, eddyquaddir,True, host, sess, bump=False, target=None, exactmatch=False, retainFolderTree=True, exactFolder='quad')
             
             quadfolders=os.path.join(eddyquaddir,'quad_folders.txt')
 
@@ -339,11 +339,12 @@ try:
                         INPUT_FOLDER=commandInput.split('>')[0].strip()
                         OUTPUT_FOLDER=commandInput.split('>')[1].strip()
                         logtext (LOGFILE,'filetools:move input folder set to %s and output folder set to %s.' % (INPUT_FOLDER, OUTPUT_FOLDER))
-                        if checkSessionResource(INPUT_FOLDER, session, host, sess):
+                        if checkProjectResource(INPUT_FOLDER, project, host, sess):
                             if OUTPUT_FOLDER:
-                                moveLoc = backupFolder(session,workflowId,INPUT_FOLDER, OUTPUT_FOLDER, LOGFILE, LOGFILENAME,host,sess)
+                                moveLoc = backupProjectFolder(project,workflowId,INPUT_FOLDER, OUTPUT_FOLDER, LOGFILE, LOGFILENAME,host,sess)
                                 logtext (LOGFILE, "moved  " + INPUT_FOLDER + " to " + moveLoc)
-                                deleteFolder("/data/experiments/%s/resources/%s" % (session,INPUT_FOLDER), LOGFILE,sess)                    
+                                deleteFolder(workflowId, "/data/projects/%s/resources/%s" % (project,INPUT_FOLDER), LOGFILE, host, sess)
+                    
                             else:
                                 logtext (LOGFILE,'Output destination not defined. Cannot move.')
                         else:
@@ -366,9 +367,9 @@ try:
                         INPUT_FOLDER=commandInput.split('>')[0].strip()
                         OUTPUT_FOLDER=commandInput.split('>')[1].strip()
                         logtext (LOGFILE,'filetools:copy input folder set to %s and output folder set to %s.' % (INPUT_FOLDER, OUTPUT_FOLDER))
-                        if checkSessionResource(INPUT_FOLDER,session, host, sess):
+                        if checkProjectResource(INPUT_FOLDER,project, host, sess):
                             if OUTPUT_FOLDER:
-                                copyLoc = backupFolder(session,workflowId,INPUT_FOLDER, OUTPUT_FOLDER, LOGFILE, LOGFILENAME, host,sess)
+                                copyLoc = backupProjectFolder(project,workflowId,INPUT_FOLDER, OUTPUT_FOLDER, LOGFILE, LOGFILENAME, host,sess)
                                 logtext (LOGFILE, "copied  " + INPUT_FOLDER + " to " + copyLoc)
                             else:
                                 logtext (LOGFILE,'Output destination not defined. Cannot copy.')
@@ -397,7 +398,7 @@ try:
         os.system(rmtmp_command)
         os.mkdir("/tmp")
 
-    logtext (LOGFILE, 'All done with session processing.')
+    logtext (LOGFILE, 'All done with project processing.')
 except Exception as e:
     logtext (LOGFILE, 'Exception thrown:')
     logtext (LOGFILE, str(e))
@@ -406,12 +407,12 @@ finally:
     LOGFILE.flush()
     # merge old log files with current log file
     if not debugmode:
-        logtext(LOGFILE, 'Uploading LOG files for session %s to location %s' % (session, LOG_RESOURCE_FOLDER))
+        logtext(LOGFILE, 'Uploading LOG files for project %s to location %s' % (project, LOG_RESOURCE_FOLDER))
         LOGFILE.flush()
         try: 
-            downloadSessionfiles (LOG_RESOURCE_FOLDER, session, LOGFOLDER, True, host,sess)
-            deleteFolder("/data/experiments/%s/resources/%s" % (session,LOG_RESOURCE_FOLDER), LOGFILE ,sess)
-            uploadfiles (workflowId , "LOG_TXT", "LOG_FILES" ,"LOG", LOGFOLDER, "/data/experiments/%s/resources/%s/files" % (session,LOG_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
+            downloadProjectfiles (LOG_RESOURCE_FOLDER, project, LOGFOLDER, True, host , sess)
+            deleteFolder(workflowId, "/data/projects/%s/resources/%s" % (project,LOG_RESOURCE_FOLDER), LOGFILE, host, sess)
+            uploadfiles (workflowId , "LOG_TXT", "LOG_FILES" ,"LOG", LOGFOLDER, "/data/projects/%s/resources/%s/files" % (project,LOG_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
         except Exception as e:
             logtext (LOGFILE, 'Exception thrown in Finally Block.')
             logtext (LOGFILE, str(e))

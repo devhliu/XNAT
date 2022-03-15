@@ -163,7 +163,7 @@ def backupFolder(session,wfId,collectionFolder, backupLoc, log, logfilename,host
 def backupProjectFolder(project,wfId,collectionFolder, backupLoc, log, logfilename, host, sess):
         if not os.path.isdir("/tmp"):
                 os.mkdir("/tmp")
-        if checkProjectResource(backupLoc, project,sess):
+        if checkProjectResource(backupLoc, project,host, sess):
                 BACKUPPREFIX = datetime.datetime.now().strftime("%m%d%y_%H%M%S_%f")
                 logtext (log, "location " + backupLoc  + " already exists ")
                 foldername = backupLoc + "_" + BACKUPPREFIX
@@ -185,8 +185,6 @@ def backupProjectFolder(project,wfId,collectionFolder, backupLoc, log, logfilena
         rmtree(tempdir)
         return foldername
 
-
-
 def downloadSessionfiles (collectionFolder, session, outputDir, doit, host, sess):
     if not os.path.isdir(outputDir):
          os.mkdir(outputDir)
@@ -203,8 +201,8 @@ def downloadSessionfiles (collectionFolder, session, outputDir, doit, host, sess
 
         bidsTree=resURI.split(resCat_ID + '/files/')[1]
         bidsTreeFolders=bidsTree.split('/')
-        if  bidsTreeFolders[-1] == resName:
-            if resCollection == collectionFolder:
+        if resCollection == collectionFolder:
+            if  bidsTreeFolders[-1] == resName:
                 bidsTreeList.append(bidsTree)
                 newdir=outputDir
                 if doit:
@@ -217,6 +215,56 @@ def downloadSessionfiles (collectionFolder, session, outputDir, doit, host, sess
                         download(resName,resourceListValue,sess)
                     except:
                         print("PROBLEM downloading {}. This file has been skipped.".format(resName))
+    return bidsTreeList
+
+
+def downloadSessionfilesFiltered (collectionFolder, session, outputDir, doit, host, sess,bump=False,target=None,exactmatch=False,retainFolderTree=True,exactFolder=None):
+        
+    if exactFolder is not None:
+        exactMatch = False
+        target = None
+        retainFolderTree = True
+
+
+    if not os.path.isdir(outputDir):
+         os.mkdir(outputDir)
+    bidsTreeList=[]
+    resourceList=get(sess, host + "/data/experiments/%s/files" % session, params={"format": "json"})
+    resourceListJson = resourceList.json()["ResultSet"]["Result"]
+    for resourceListValue in resourceListJson:
+        resCollection = resourceListValue['collection']
+        resURI = resourceListValue['URI']
+        resourceListValue['URI'] = host+resourceListValue['URI']
+        resName = resourceListValue['Name']
+        resCat_ID = resourceListValue['cat_ID']
+        resourceListValue['absolutePath']=''
+
+        bidsTree=resURI.split(resCat_ID + '/files/')[1]
+        bidsTreeFolders=bidsTree.split('/')
+        if resCollection == collectionFolder:
+            if  bidsTreeFolders[-1] == resName:
+                folderLoc = [ ind  for ind, ele in enumerate(bidsTreeFolders[0:-1]) if  ele == exactFolder ]
+                if (target is None and exactFolder is None) or (exactmatch and resName == target) or (not exactmatch and target is not None and target in resName) or (len(folderLoc) > 0 and exactFolder is not None):
+                    if bump:
+                        bidsTreeFolders.insert(0,session)
+                    bidsTreeList.append('/'.join(bidsTreeFolders))
+                    newdir=outputDir
+                    if doit:
+                        if retainFolderTree:
+                            for dir in bidsTreeFolders[0:-1]:
+                                newdir=os.path.join(newdir,dir)
+                                if not os.path.isdir(newdir):
+                                    os.mkdir(newdir)
+                        elif bump:
+                            newdir=os.path.join(newdir,session)
+                            if not os.path.isdir(newdir):
+                                os.mkdir(newdir)
+
+                        os.chdir(newdir)
+                        try:
+                            download(resName,resourceListValue,sess)
+                        except:
+                            print("PROBLEM downloading {}. This file has been skipped.".format(resName))
     return bidsTreeList
 
 def getResourceInfo(collectionFolder, session, host,sess):
@@ -259,8 +307,8 @@ def downloadAllSessionfiles (collectionFolder, project, outputDir, doit, host,se
 
             bidsTree=resURI.split(resCat_ID + '/files/')[1]
             bidsTreeFolders=bidsTree.split('/')
-            if  bidsTreeFolders[-1] == resName:
-                if resCollection == collectionFolder:
+            if resCollection == collectionFolder:
+                if  bidsTreeFolders[-1] == resName:
                     if bump:
                         bidsTreeFolders.insert(0,sessionAccession)
                     bidsTreeList.append('/'.join(bidsTreeFolders))
@@ -301,8 +349,8 @@ def downloadSessionfile (collectionFolder, project, outputDir, target,doit, reta
 
             bidsTree=resURI.split(resCat_ID + '/files/')[1]
             bidsTreeFolders=bidsTree.split('/')
-            if  bidsTreeFolders[-1] == resName:
-                if resCollection == collectionFolder and resName == target:
+            if resCollection == collectionFolder and resName == target:
+                if  bidsTreeFolders[-1] == resName:       
                     bidsTreeList.append(bidsTree)
                     newdir=outputDir
                     if doit:
@@ -331,8 +379,8 @@ def downloadProjectfiles (collectionFolder, project, outputDir, doit, host , ses
 
         bidsTree=resURI.split(resCat_ID + '/files/')[1]
         bidsTreeFolders=bidsTree.split('/')
-        if  bidsTreeFolders[-1] == resName:
-            if resCollection == collectionFolder:
+        if resCollection == collectionFolder:
+            if  bidsTreeFolders[-1] == resName:
                 bidsTreeList.append(bidsTree)
                 newdir=outputDir
                 if doit:
@@ -362,18 +410,18 @@ def downloadProjectfile (collectionFolder, project, outputDir, target, doit, ret
 
                 bidsTree=resURI.split(resCat_ID + '/files/')[1]
                 bidsTreeFolders=bidsTree.split('/')
-                if  bidsTreeFolders[-1] == resName:
-                        if resCollection == collectionFolder and resName == target:
-                                bidsTreeList.append(bidsTree)
-                                newdir=outputDir
-                                if doit:
-                                    if retainFolderTree:
-                                        for dir in bidsTreeFolders[0:-1]:
-                                                newdir=os.path.join(newdir,dir)
-                                                if not os.path.isdir(newdir):
-                                                        os.mkdir(newdir)
-                                    os.chdir(newdir)
-                                    download(resName,resourceListValue,sess)
+                if resCollection == collectionFolder and resName == target:
+                    if  bidsTreeFolders[-1] == resName:
+                            bidsTreeList.append(bidsTree)
+                            newdir=outputDir
+                            if doit:
+                                if retainFolderTree:
+                                    for dir in bidsTreeFolders[0:-1]:
+                                            newdir=os.path.join(newdir,dir)
+                                            if not os.path.isdir(newdir):
+                                                    os.mkdir(newdir)
+                                os.chdir(newdir)
+                                download(resName,resourceListValue,sess)
         return bidsTreeList
 
 
@@ -493,7 +541,7 @@ def downloadSubjectSessionfiles (collectionFolder, project, subject, outputDir, 
     return bidsTreeList
 
 
-def downloadAllSessionfilesFiltered (collectionFolder, project, outputDir, doit, host,sess,bump=False,target=None,exactmatch=False,refdate=None,retainFolderTree=False,exactFolder=None):
+def downloadAllSessionfilesFiltered (collectionFolder, project, outputDir, doit, host,sess,bump=False,target=None,exactmatch=False,refdate=None,retainFolderTree=True,exactFolder=None):
 
     if exactFolder is not None:
         bump = True
