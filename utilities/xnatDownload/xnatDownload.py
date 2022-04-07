@@ -36,11 +36,13 @@ def main():
 
     if args.user is None:
         user = input("User: ")
-        args.user = user
+    else:
+        user = args.user
 
     if args.password is None:
         password = getpass.getpass()
-        args.password = password
+    else:
+        password = args.password
     
     session = args.session
     subject = args.subject
