@@ -667,7 +667,6 @@ try:
 
 
             if DO_ACTION and not BYPASS_ACTION:
-
                 try:
                     copyitems = action['copy']
                 except KeyError:
@@ -675,19 +674,12 @@ try:
                     logtext (LOGFILE, 'No copy items provided.')
 
                 for item in copyitems:
+                    GLOBSTRING=""
                     entities={}
                     entities['extension']=['nii','nii.gz']
-                    try:
-                        dataType = item["dataType"]
-                        entities['datatype']=dataType
-                    except KeyError:
-                        dataType = None
-
-                    try:
-                        modalityLabel = item["modalityLabel"]
-                        entities['suffix']=modalityLabel
-                    except KeyError:
-                        modalityLabel = None
+                    entities['subject']=bids_subject_label                            
+                    if not NOSESSION:
+                        entities['session']=bids_session_label
 
                     try:
                         customLabels = item["customLabels"]
@@ -700,12 +692,17 @@ try:
                         else:
                             entities['subject']=bids_subject_label
 
+                        GLOBSTRING=GLOBSTRING + 'sub-'+ entities['subject'] + '/'
+
                         sessionbids=list(filter(lambda x: "ses-" in x, labels))
                         if sessionbids:
                             sessionValue=sessionbids[0].split('-')[1]
                             entities['session']=sessionValue
+                            GLOBSTRING=GLOBSTRING + 'ses-'+ entities['session'] + '/'
+                            
                         elif not NOSESSION:
                             entities['session']=bids_session_label
+                            GLOBSTRING=GLOBSTRING + 'ses-'+ entities['session'] + '/'
 
                         task=list(filter(lambda x: "task-" in x, labels))
                         if task:
@@ -728,6 +725,24 @@ try:
                         if not NOSESSION:
                             entities['session']=bids_session_label
 
+                    try:
+                        dataType = item["dataType"]
+                        entities['datatype']=dataType
+                        GLOBSTRING=GLOBSTRING + entities['datatype'] + '/'
+                    except KeyError:
+                        dataType = None
+
+                    try:
+                        modalityLabel = item["modalityLabel"]
+                        entities['suffix']=modalityLabel
+                        if customLabels:
+                            GLOBSTRING=GLOBSTRING + '*'+customLabels+ '*' + modalityLabel +'*' 
+                        else:
+                            GLOBSTRING=GLOBSTRING + '*' + modalityLabel +'*' 
+
+                    except KeyError:
+                        modalityLabel = None
+
                     files = layout.get(return_type='file', **entities)
                     if files:
                         sourcefile = files[0]
@@ -739,9 +754,52 @@ try:
                         else:
                             sourcejson = None
                     else:
-                        sourcefile = None
+                        # we will try with glob
 
+                        sourcefile = glob.glob(os.path.join(sessionBidsDir,GLOBSTRING + '.nii.gz'))
+                        if sourcefile:
+                            sourcefile = sourcefile[0]
+                        sourcejson = glob.glob(os.path.join(sessionBidsDir,GLOBSTRING + '.json'))
+                        if sourcejson:
+                            sourcejson = sourcejson[0]
 
+                    try:
+                        sidecarChanges = item["sidecarChanges"]
+                    except KeyError:
+                        sidecarChanges = []
+                        logtext (LOGFILE, 'No sidecarChanges to process')
+
+                    INTENDFILE = None
+                    SIDECAR = {}
+                    if sidecarChanges and sourcefile and sourcejson:
+                        try:
+                            IntendedFor = sidecarChanges["IntendedFor"]
+                            fileElements = IntendedFor.split("/")
+                            dataType = fileElements[0]
+                            
+                            intendEntities = {}
+                            intendEntities['extension']=['nii','nii.gz']
+                            intendEntities['datatype']=dataType
+                            intendEntities['subject']=bids_subject_label
+                            if not NOSESSION:
+                                intendEntities['session']=bids_session_label
+                            task=list(filter(lambda x: "task-" in x, fileElements))
+                            if task:
+                                taskValue=task[0].split('-')[1]
+                                intendEntities['task']=taskValue
+                            modality=list(filter(lambda x: "modality-" in x, fileElements))
+                            if modality:
+                                modalityValue=modality[0].split('-')[1]
+                                intendEntities['suffix']=modalityValue
+                            intendfiles = layout.get(return_type='file', **intendEntities)
+                            if intendfiles:
+                                INTENDFILE=intendfiles[0].split(sessionBidsDir + '/' + 'sub-' + intendEntities['subject'] + '/')[1]
+                                SIDECAR["IntendedFor"]=INTENDFILE
+
+                        except KeyError:
+                            IntendedFor = None                        
+
+                    entities={}
                     try:
                         destination = item["destination"]
                     except KeyError:
@@ -749,7 +807,10 @@ try:
                         logtext (LOGFILE, 'No Destination provided for copy')
 
                     if destination and sourcefile and sourcejson:
-                        entities['subject']=bids_subject_label
+                        entities['subject']=bids_subject_label                            
+                        if not NOSESSION:
+                            entities['session']=bids_session_label
+
                         try:
                             dataType = destination["dataType"]
                             entities['datatype']=dataType
@@ -761,6 +822,12 @@ try:
                             entities['suffix']=modalityLabel
                         except KeyError:
                             modalityLabel = None
+
+                        try:
+                            fmapLabel = destination["fmap"]
+                            entities['fmap']=fmapLabel
+                        except KeyError:
+                            fmapLabel = None
 
                         try:
                             customLabels = destination["customLabels"]
@@ -791,26 +858,35 @@ try:
                                 entities['run']=runValue
                             else:
                                 entities.pop('run', None)
-
-                            entities['extension']='nii.gz'
-                            outputfile=os.path.join(sessionBidsDir, layout.build_path(entities))
-                            if os.path.exists(sourcefile):
-                                logtext (LOGFILE, "copying %s to %s" %(sourcefile, outputfile))
-                                subprocess.check_output(['cp',sourcefile,outputfile])
-                            else:
-                                logtext (LOGFILE, "ERROR: %s cannot be found. Check bidsaction file logic." % sourcefile)
-
-
-                            entities['extension']='json'
-                            outputjson=os.path.join(sessionBidsDir, layout.build_path(entities))
-                            if os.path.exists(sourcejson):
-                                logtext (LOGFILE, "copying %s to %s" %(sourcejson, outputjson))
-                                subprocess.check_output(['cp',sourcejson, outputjson])
-                            else:
-                                logtext (LOGFILE, "ERROR: %s cannot be found. Check bidsaction file logic." % sourcejson)
-
                         except KeyError:
                             customLabels= None
+
+                        entities['extension']='nii.gz'
+                        outputfile=os.path.join(sessionBidsDir, layout.build_path(entities))
+                        if os.path.exists(sourcefile):
+                            logtext (LOGFILE, "copying %s to %s" %(sourcefile, outputfile))
+                            subprocess.check_output(['cp',sourcefile,outputfile])
+                        else:
+                            logtext (LOGFILE, "ERROR: %s cannot be found. Check bidsaction file logic." % sourcefile)
+
+
+                        entities['extension']='json'
+                        outputjson=os.path.join(sessionBidsDir, layout.build_path(entities))
+                        if os.path.exists(sourcejson):
+                            logtext (LOGFILE, "copying %s to %s" %(sourcejson, outputjson))
+                            subprocess.check_output(['cp',sourcejson, outputjson])
+                        else:
+                            logtext (LOGFILE, "ERROR: %s cannot be found. Check bidsaction file logic." % sourcejson)
+
+                        if len(SIDECAR) > 0:
+                            with open(outputjson,'r') as infile:
+                                sidecarjson = json.load(infile)
+                            for itemkey, itemvalue in SIDECAR.items():
+                                sidecarjson[itemkey]=itemvalue
+                            with open(outputjson,'w') as outfile:
+                                json.dump(sidecarjson,outfile,indent=2)
+
+
                     else:
                         logtext (LOGFILE,"Destination or source file could not be found - skipping") 
 
