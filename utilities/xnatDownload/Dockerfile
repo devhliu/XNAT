@@ -15,6 +15,8 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64
 
 ENV PATH="/opt/miniconda/bin:${PATH}"
 
+RUN pip install pybids==0.15.1
+
 # Create a shared $HOME directory
 RUN useradd -m -s /bin/bash -G users aacazxnat
 WORKDIR /home/aacazxnat

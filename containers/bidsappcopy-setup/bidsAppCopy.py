@@ -89,7 +89,7 @@ Project=None
 try:
     with open(datadescription,'r') as datafile:
         datasetjson=json.load(datafile)
-        project=datasetjson["Name"]
+        project=datasetjson["XNATProject"]
         print("identified project as {}".format(project))
 except Exception as e:
     print("Exception thrown in bidsAppCopy.py")

@@ -55,21 +55,21 @@ RUN apt update && \
 RUN cd /usr/local/src && \
     git clone https://github.com/rordenlab/dcm2niix.git && \
     cd dcm2niix && \
-    git checkout tags/v1.0.20181125 -b install && \
+    git checkout tags/v1.0.20211006 -b install && \
     mkdir build  && \
     cd build && \
     cmake ..  && \
     make install 
 
 #Install dcm2bids from github
-RUN cd /usr/local/src && \
-    git clone https://github.com/cbedetti/Dcm2Bids.git
+#RUN cd /usr/local/src && \
+#    git clone https://github.com/cbedetti/Dcm2Bids.git
 
-RUN cd /usr/local/src/Dcm2Bids && \
-    git checkout -f tags/2.1.4 
+#RUN cd /usr/local/src/Dcm2Bids && \
+#    git checkout -f tags/2.1.4 
 
-RUN cd /usr/local/src/Dcm2Bids && sed -i 's/datetime.now().isoformat()/(datetime.now() - datetime(1970,1,1)).total_seconds()/g' ./dcm2bids/dcm2bids.py    
-RUN cd /usr/local/src/Dcm2Bids && pip install .
+#RUN cd /usr/local/src/Dcm2Bids && sed -i 's/datetime.now().isoformat()/(datetime.now() - datetime(1970,1,1)).total_seconds()/g' ./dcm2bids/dcm2bids.py    
+#RUN cd /usr/local/src/Dcm2Bids && pip install .
 
 
 WORKDIR /opt
@@ -82,7 +82,9 @@ ENV PATH=/opt/pydeface:$PATH
 
 
 # additional python dependencies for qcsession-xnat.py; several like pybids aready fulfilled by mriqc
-RUN pip install requests==2.23.0 
+RUN pip install requests==2.23.0 \
+                heudiconv==0.10.0 \
+                dcm2bids==2.1.6
 
 RUN mkdir -p /src /dicom /nifti /bids
 

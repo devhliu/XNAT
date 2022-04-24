@@ -4,6 +4,7 @@ from xnatutils.phantomReports import *
 from xnatutils.standalone_html import *
 from shutil import copytree
 from bids import BIDSLayout
+from pydicom import dcmread
 import nibabel as nib
 import numpy as np
 import argparse
@@ -136,13 +137,13 @@ bids_session_label = bids_session_label.replace('-','')
 logtext (LOGFILE,"BIDS Session Label: " + bids_session_label)
 
     
-subdicomdir = os.path.join(dicomdir, subject)
+subdicomdir = os.path.join(dicomdir, bids_subject_label)
 if not os.path.isdir(subdicomdir):
     logtext (LOGFILE,'creating DICOM/subject directory %s.' % subdicomdir)
     os.mkdir(subdicomdir)
         
 #make dicom dir unique - might not be truly necessary
-sesdicomdir = os.path.join(subdicomdir, session)
+sesdicomdir = os.path.join(subdicomdir, bids_session_label)
 if not os.path.isdir(sesdicomdir):
     logtext (LOGFILE,'creating DICOM/subject/session directory %s.' % sesdicomdir)
     os.mkdir(sesdicomdir)
@@ -262,6 +263,23 @@ try:
                             if bypassParam == "action":
                                 BYPASS_ACTION = True
 
+
+        CONVERTER = "DCM2BIDS"
+        SUBSTEP=':converter'
+        SUBSTEPOUT=SUBSTEP + '='
+        if SUBSTEP in step_info:
+            if SUBSTEPOUT  in step_info:
+                if step_info.split(SUBSTEPOUT)[1]:
+                    CONVERTER=step_info.split(SUBSTEPOUT)[1].split(':')[0].upper().strip()
+                    logtext (LOGFILE,'bidsconvert:converter set to %s.' % CONVERTER)
+                else:
+                    logtext (LOGFILE,'bidsconvert:converter parameter not provided. Set to default %s. Syntax is bidsconvert:converter=<CONVERTER>; choices are DCM2BIDS and HEUDICONV' % CONVERTER)
+            else:
+                logtext (LOGFILE,'bidsconvert:converter parameter not provided. Set to default %s. Syntax is bidsconvert:converter=<CONVERTER>; choices are DCM2BIDS and HEUDICONV' % CONVERTER)
+        else:
+            logtext (LOGFILE,'Default BIDS converter %s will be used.' % CONVERTER)
+
+
         DEFACE_REPLACE=False
         SUBSTEP=':defacereplace'
         if SUBSTEP in step_info:
@@ -272,13 +290,7 @@ try:
         SUBSTEP=':nosession'
         if SUBSTEP in step_info:
             NOSESSION=True
-            sessionBidsDir = subjectBidsDir
-            logtext (LOGFILE,'No session specified. creating BIDS output at directory %s.' % sessionBidsDir)
-        else:
-            sessionBidsDir=os.path.join(subjectBidsDir,"ses-"+bids_session_label)
-            if not os.path.isdir(sessionBidsDir):
-                logtext (LOGFILE,'creating BIDS/subject/session directory %s.' % sessionBidsDir)
-                os.mkdir(sessionBidsDir)
+            logtext (LOGFILE,'No session specified.')
 
         SUBSTEP=':output'
         SUBSTEPOUT=SUBSTEP + '='
@@ -500,6 +512,61 @@ try:
                 logtext (LOGFILE,'Done downloading for scan %s.' % scanid)
             
 
+            SUBJECT_DEMOGRAPHICS={}
+
+            SUBJECT_DEMOGRAPHICS["participant_id"]="sub-"+ bids_subject_label
+
+            # get dicom demograpnics
+            dcmgen=glob.glob(os.path.join(sesdicomdir,'*','*'))[0]
+            ds = dcmread(dcmgen)
+            SUBJECT_DEMOGRAPHICS["gender_dcm"]=""
+            try:
+                gender_dcm=ds.PatientSex
+                SUBJECT_DEMOGRAPHICS["gender_dcm"]=gender_dcm
+            except AttributeError:
+                pass
+
+            SUBJECT_DEMOGRAPHICS["age_dcm"]=""
+            try:
+                agedate_dcm=datetime.datetime.strptime(ds.PatientBirthDate,"%Y%m%d")
+                age_dcm=getAge(agedate_dcm)
+                SUBJECT_DEMOGRAPHICS["age_dcm"]=age_dcm
+            except AttributeError:
+                pass
+
+            # get xnat demographics
+            results=get(sess, host + "/data/subjects/%s" % subject, params={"format": "json"})
+            SUBJECT_DEMOGRAPHICS["gender_xnat"]=""
+            try:
+                gender_xnat=results.json()['items'][0]['children'][0]['items'][0]['data_fields']['gender']
+                SUBJECT_DEMOGRAPHICS["gender_xnat"]=gender_xnat
+            except KeyError:
+                pass
+
+            SUBJECT_DEMOGRAPHICS["age_xnat"]=""
+            try:
+                age_xnat=results.json()['items'][0]['children'][0]['items'][0]['data_fields']['age']
+                SUBJECT_DEMOGRAPHICS["age_xnat"]=age_xnat
+            except KeyError:
+                pass
+
+            try:
+                dob_xnat=results.json()['items'][0]['children'][0]['items'][0]['data_fields']['dob']
+                agedate_xnat=datetime.datetime.strptime(dob_xnat,"%Y-%m-%d")
+                age_xnat=getAge(agedate_xnat)
+                SUBJECT_DEMOGRAPHICS["age_xnat"]=age_xnat
+            except KeyError:
+                pass
+
+
+            try:
+                yob_xnat=results.json()['items'][0]['children'][0]['items'][0]['data_fields']['yob']
+                agedate_xnat=datetime.datetime.strptime(str(yob_xnat),"%Y")
+                age_xnat=getAge(agedate_xnat)
+                SUBJECT_DEMOGRAPHICS["age_xnat"]=age_xnat
+            except KeyError:
+                pass
+
 
             USE_ADMIN_CONFIG = True
             if RESOURCE_CONFIG:
@@ -508,13 +575,13 @@ try:
                 if fileexists:
                     USE_ADMIN_CONFIG = False
                     DO_CONFIG=True
-                    logtext(LOGFILE,"Resource action file %s successfully obtained from %s" % (RESOURCE_CONFIG_FILE, CONFIG_RESOURCE_FOLDER))
-                    if PHANTOM:
+                    logtext(LOGFILE,"Resource config file %s successfully obtained from %s" % (RESOURCE_CONFIG_FILE, CONFIG_RESOURCE_FOLDER))
+                    if PHANTOM and CONVERTER == "DCM2BIDS":
                         with open(dcm2bids_config,'r') as infile:
                             config=json.load(infile)
                         config["dcm2niixOptions"]="-b y -ba n -z y -f '%3s_%f_%p_%t'"
                         with open(dcm2bids_config, 'w') as outfile:
-                            json.dump(config, outfile)                 
+                            json.dump(config, outfile,indent=2)                 
                 else:
                     DO_CONFIG=False
                     USE_ADMIN_CONFIG=True
@@ -527,12 +594,12 @@ try:
                 if r.ok:
                     config = r.json()
                     #CPU 2/15/2022 -  Non-anonymize phantom bids json
-                    if PHANTOM:
+                    if PHANTOM and CONVERTER == "DCM2BIDS":
                         config["dcm2niixOptions"]="-b y -ba n -z y -f '%3s_%f_%p_%t'"
                         
                     dcm2bids_config=os.path.join(bidsdir,'dcm2bids_config.json')
                     with open(dcm2bids_config, 'w') as outfile:
-                        json.dump(config, outfile)
+                        json.dump(config, outfile,indent=2)
                         DO_CONFIG=True
                 else:
                     logtext (LOGFILE,"Could not read project BIDS map")
@@ -545,34 +612,117 @@ try:
                     config_copy = r.json()
                     dcm2bids_config_copy=os.path.join(CONFIGFOLDER,'dcm2bids_config.json')
                     with open(dcm2bids_config_copy, 'w') as outfile_copy:
-                        json.dump(config_copy, outfile_copy)
+                        json.dump(config_copy, outfile_copy,indent=2)
                 else:
                     logtext (LOGFILE,"Could not read project BIDS config map")
 
+            if CONVERTER == "DCM2BIDS":
+                if DO_CONFIG and not BYPASS_CONFIG:
+                    if overwrite:
+                        if NOSESSION:
+                            dcm2bids_command = "dcm2bids -d {} -p {} -c {} -o {} --clobber".format(sesdicomdir, bids_subject_label, dcm2bids_config, sessionBidsDir ).split()
+                        else:
+                            dcm2bids_command = "dcm2bids -d {} -p {} -s {} -c {} -o {} --clobber".format(sesdicomdir, bids_subject_label, bids_session_label, dcm2bids_config, sessionBidsDir ).split()
+                    else:
+                        if NOSESSION:
+                            dcm2bids_command = "dcm2bids -d {} -p {} -c {} -o {}".format(sesdicomdir, bids_subject_label, dcm2bids_config, sessionBidsDir ).split()
+                        else:
+                            dcm2bids_command = "dcm2bids -d {} -p {} -s {} -c {} -o {}".format(sesdicomdir, bids_subject_label, bids_session_label, dcm2bids_config, sessionBidsDir ).split()
+                    logtext(LOGFILE, ' '.join(dcm2bids_command))
+                    logtext(LOGFILE, str(subprocess.check_output(dcm2bids_command)))
 
-            if DO_CONFIG and not BYPASS_CONFIG:
-                if overwrite:
+                    # for laughs lets also run a bare bones heudiconv to give us the scan info which we can use for QC
+                    heudidicomdir=os.path.join(dicomdir, "{subject}", "{session}","*","*")
                     if NOSESSION:
-                        dcm2bids_command = "dcm2bids -d {} -p {} -c {} -o {} --clobber".format(sesdicomdir, bids_subject_label, dcm2bids_config, sessionBidsDir ).split()
+                        heudiconv_command = "heudiconv -d {} -s {} -f convertall -o {} -c none --overwrite".format(heudidicomdir, bids_subject_label, sessionBidsDir ).split()
                     else:
-                        dcm2bids_command = "dcm2bids -d {} -p {} -s {} -c {} -o {} --clobber".format(sesdicomdir, bids_subject_label, bids_session_label, dcm2bids_config, sessionBidsDir ).split()
-                else:
-                    if NOSESSION:
-                        dcm2bids_command = "dcm2bids -d {} -p {} -c {} -o {}".format(sesdicomdir, bids_subject_label, dcm2bids_config, sessionBidsDir ).split()
+                        heudiconv_command = "heudiconv -d {} -s {} -ss {} -f convertall -o {} -c none --overwrite".format(heudidicomdir, bids_subject_label, bids_session_label, sessionBidsDir ).split()
+
+                    logtext(LOGFILE, ' '.join(heudiconv_command))
+                    logtext(LOGFILE, str(subprocess.check_output(heudiconv_command)))
+
+                    convtable=glob.glob(os.path.join(sessionBidsDir,'.heudiconv',bids_subject_label,'info','dicominfo*.tsv'))
+                    if convtable:
+                        convtableout=os.path.join(sessionBidsDir,'dicominfo_heudiconv_' + TIMESTAMP + '.tsv')
+                        logtext (LOGFILE, "copying %s to %s" %(convtable[0], convtableout))
+                        subprocess.check_output(['cp','-f',convtable[0],convtableout])
+                        convtableout=os.path.join(LOGFOLDER,'dicominfo_heudiconv_' + TIMESTAMP + '.tsv')
+                        logtext (LOGFILE, "copying %s to %s" %(convtable[0], convtableout))
+                        subprocess.check_output(['cp','-f',convtable[0],convtableout])
+
+             
+                #delete temporary folder
+                if cleanup:
+                    tmpBidsDir=os.path.join(sessionBidsDir,'tmp_dcm2bids')
+                    if os.path.exists(tmpBidsDir):
+                        logtext(LOGFILE,'Cleaning up %s directory.' % tmpBidsDir)
+                        rmtree(tmpBidsDir)
+                    tmpBidsDir=os.path.join(sessionBidsDir,'.heudiconv')
+                    if os.path.exists(tmpBidsDir):
+                        logtext(LOGFILE,'Cleaning up %s directory.' % tmpBidsDir)
+                        rmtree(tmpBidsDir)
+
+
+            if CONVERTER == "HEUDICONV":
+                heudidicomdir=os.path.join(dicomdir, "{subject}", "{session}","*","*")
+                if DO_CONFIG and not BYPASS_CONFIG:
+                    if overwrite:
+                        if NOSESSION:
+                            heudiconv_command = "heudiconv -d {} -s {} -f {} -o {} -c dcm2niix -b --overwrite --minmeta".format(heudidicomdir, bids_subject_label, dcm2bids_config, sessionBidsDir ).split()
+                        else:
+                            heudiconv_command = "heudiconv -d {} -s {} -ss {} -f {} -o {} -c dcm2niix -b --overwrite --minmeta".format(heudidicomdir, bids_subject_label, bids_session_label, dcm2bids_config, sessionBidsDir ).split()
                     else:
-                        dcm2bids_command = "dcm2bids -d {} -p {} -s {} -c {} -o {}".format(sesdicomdir, bids_subject_label, bids_session_label, dcm2bids_config, sessionBidsDir ).split()
-                logtext(LOGFILE, ' '.join(dcm2bids_command))
-                logtext(LOGFILE, str(subprocess.check_output(dcm2bids_command)))
-         
-            #delete temporary folder
-            if cleanup:
-                tmpBidsDir=os.path.join(sessionBidsDir,'tmp_dcm2bids')
-                if os.path.exists(tmpBidsDir):
-                    logtext(LOGFILE,'Cleaning up %s directory.' % tmpBidsDir)
-                    rmtree(tmpBidsDir)
+                        if NOSESSION:
+                            heudiconv_command = "heudiconv -d {} -s {} -f {} -o {} -c dcm2niix -b --minmeta".format(heudidicomdir, bids_subject_label, dcm2bids_config, sessionBidsDir ).split()
+                        else:
+                            heudiconv_command = "heudiconv -d {} -s {} -ss {} -f {} -o {} -c dcm2niix -b --minmeta".format(heudidicomdir, bids_subject_label, bids_session_label, dcm2bids_config, sessionBidsDir ).split()
+                    logtext(LOGFILE, ' '.join(heudiconv_command))
+                    logtext(LOGFILE, str(subprocess.check_output(heudiconv_command)))
+             
+                # backup particpants file created by heudiconv - we are going to create our own
+                partfile=glob.glob(os.path.join(sessionBidsDir,'participants.tsv'))
+                if partfile:
+                    partfileout=os.path.join(sessionBidsDir,'heudi_participants_' + TIMESTAMP + '.tsv')
+                    logtext (LOGFILE, "moving %s to %s" %(partfile[0], partfileout))
+                    subprocess.check_output(['mv','-f',partfile[0],partfileout])
+
+                #delete temporary folder
+                # copy over use temporary file to top bids directory and to log directory
+                convtable=glob.glob(os.path.join(sessionBidsDir,'.heudiconv',bids_subject_label,'ses-*','info','dicominfo*.tsv'))
+                if convtable:
+                    convtableout=os.path.join(sessionBidsDir,'dicominfo_heudiconv_' + TIMESTAMP + '.tsv')
+                    logtext (LOGFILE, "copying %s to %s" %(convtable[0], convtableout))
+                    subprocess.check_output(['cp','-f',convtable[0],convtableout])
+                    convtableout=os.path.join(LOGFOLDER,'dicominfo_heudiconv_' + TIMESTAMP + '.tsv')
+                    logtext (LOGFILE, "copying %s to %s" %(convtable[0], convtableout))
+                    subprocess.check_output(['cp','-f',convtable[0],convtableout])
+
+                if cleanup:
+                    tmpBidsDir=os.path.join(sessionBidsDir,'.heudiconv')
+                    if os.path.exists(tmpBidsDir):
+                        logtext(LOGFILE,'Cleaning up %s directory.' % tmpBidsDir)
+                        rmtree(tmpBidsDir)
+
+            # create participants tsv file - we overwrite the one created by heudiconv
+            participantsTSV=os.path.join(sessionBidsDir,'participants.tsv')
+            table_columns=['participant_id','gender_dcm', 'gender_xnat', 'age_dcm', 'age_xnat', 'group']
+
+            participant_id=SUBJECT_DEMOGRAPHICS["participant_id"]
+            gender_dcm=SUBJECT_DEMOGRAPHICS["gender_dcm"]
+            gender_xnat=SUBJECT_DEMOGRAPHICS["gender_xnat"]
+            age_dcm=SUBJECT_DEMOGRAPHICS["age_dcm"]
+            age_xnat=SUBJECT_DEMOGRAPHICS["age_xnat"]
+            group = 'Control'
+
+            table_data=[]
+            table_data.append([participant_id, gender_dcm, gender_xnat, age_dcm, age_xnat, group ])
+            
+            df = pd.DataFrame(table_data, columns=table_columns)
+            df.to_csv(participantsTSV,sep="\t", index=False)
 
             # perform deface
-            createDatasetDescription(sessionBidsDir, project)
+            projname=getProjectName(sess, host, project)
+            createDatasetDescription(sessionBidsDir, project,projname)
             layout = BIDSLayout(sessionBidsDir)
             T1w=layout.get(suffix='T1w', extension='nii.gz')
             for t1w in T1w:
@@ -581,7 +731,7 @@ try:
                 t1wentity = layout.parse_file_entities(t1wpath)
                 t1wjsonentity = t1wentity.copy()
                 t1wjsonentity["extension"]="json"
-                t1wjsonfiles = layout.get(return_type='file', **t1wjsonentity)
+                t1wjsonfiles = layout.get(return_type='file', invalid_filters='allow', **t1wjsonentity)
                 if t1wjsonfiles:
                     t1wjson = t1wjsonfiles[0]
                 else:
@@ -595,7 +745,7 @@ try:
                         if not DEFACE_REPLACE:
                             BACKUPT1W = t1wpath.split(".nii")[0] + "_backup.nii.gz"
                             logtext(LOGFILE,"pydeface: original and defaced file have the same name. Saving backup of original to %s" % BACKUPT1W )
-                            subprocess.check_output(['cp',t1wpath, BACKUPT1W])
+                            subprocess.check_output(['cp','-f',t1wpath, BACKUPT1W])
 
 
                     t1wjsonentity = t1wentity.copy()
@@ -613,7 +763,7 @@ try:
 
                     if t1wjson and DEFACEJSON and not T1WDEFACESAME:
                         logtext (LOGFILE, "copying %s to %s" %(t1wjson, DEFACEJSON))
-                        subprocess.check_output(['cp',t1wjson, DEFACEJSON])
+                        subprocess.check_output(['cp','-f',t1wjson, DEFACEJSON])
 
 
                     if DEFACE_REPLACE and not T1WDEFACESAME:
@@ -649,7 +799,7 @@ try:
                     action = r.json()
                     dcm2bids_action=os.path.join(bidsdir,'dcm2bids_action.json')
                     with open(dcm2bids_action, 'w') as outfile:
-                        json.dump(action, outfile)
+                        json.dump(action, outfile,indent=2)
                 else:
                     logtext (LOGFILE,"Could not read project BIDS action map")
                     DO_ACTION=False
@@ -661,107 +811,23 @@ try:
                     action_copy = r.json()
                     dcm2bids_action_copy=os.path.join(CONFIGFOLDER,'dcm2bids_action.json')
                     with open(dcm2bids_action_copy, 'w') as outfile_copy:
-                        json.dump(action_copy, outfile_copy)
+                        json.dump(action_copy, outfile_copy,indent=2)
                 else:
                     logtext (LOGFILE,"Could not read project BIDS action map")
 
 
             if DO_ACTION and not BYPASS_ACTION:
+                # Perform Change
                 try:
-                    copyitems = action['copy']
+                    changeitems = action['change']
                 except KeyError:
-                    copyitems = []
-                    logtext (LOGFILE, 'No copy items provided.')
+                    changeitems = []
+                    logtext (LOGFILE, 'No change items provided.')
 
-                for item in copyitems:
-                    GLOBSTRING=""
-                    entities={}
-                    entities['extension']=['nii','nii.gz']
-                    entities['subject']=bids_subject_label                            
-                    if not NOSESSION:
-                        entities['session']=bids_session_label
-
-                    try:
-                        customLabels = item["customLabels"]
-                        labels = customLabels.split("_")
-
-                        subjectbids=list(filter(lambda x: "sub-" in x, labels))
-                        if subjectbids:
-                            subjectValue=subjectbids[0].split('-')[1]
-                            entities['subject']=subjectValue
-                        else:
-                            entities['subject']=bids_subject_label
-
-                        GLOBSTRING=GLOBSTRING + 'sub-'+ entities['subject'] + '/'
-
-                        sessionbids=list(filter(lambda x: "ses-" in x, labels))
-                        if sessionbids:
-                            sessionValue=sessionbids[0].split('-')[1]
-                            entities['session']=sessionValue
-                            GLOBSTRING=GLOBSTRING + 'ses-'+ entities['session'] + '/'
-                            
-                        elif not NOSESSION:
-                            entities['session']=bids_session_label
-                            GLOBSTRING=GLOBSTRING + 'ses-'+ entities['session'] + '/'
-
-                        task=list(filter(lambda x: "task-" in x, labels))
-                        if task:
-                            taskValue=task[0].split('-')[1]
-                            entities['task']=taskValue
-
-                        acquisition=list(filter(lambda x: "acq-" in x, labels))
-                        if acquisition:
-                            acquisitionValue=acquisition[0].split('-')[1]
-                            entities['acquisition']=acquisitionValue
-
-                        run=list(filter(lambda x: "run-" in x, labels))
-                        if run:
-                            runValue=run[0].split('-')[1]
-                            entities['run']=runValue
-
-                    except KeyError:
-                        customLabels= None
-                        entities['subject']=bids_subject_label
-                        if not NOSESSION:
-                            entities['session']=bids_session_label
-
-                    try:
-                        dataType = item["dataType"]
-                        entities['datatype']=dataType
-                        GLOBSTRING=GLOBSTRING + entities['datatype'] + '/'
-                    except KeyError:
-                        dataType = None
-
-                    try:
-                        modalityLabel = item["modalityLabel"]
-                        entities['suffix']=modalityLabel
-                        if customLabels:
-                            GLOBSTRING=GLOBSTRING + '*'+customLabels+ '*' + modalityLabel +'*' 
-                        else:
-                            GLOBSTRING=GLOBSTRING + '*' + modalityLabel +'*' 
-
-                    except KeyError:
-                        modalityLabel = None
-
-                    files = layout.get(return_type='file', **entities)
-                    if files:
-                        sourcefile = files[0]
-                        entities = layout.parse_file_entities(sourcefile)
-                        entities['extension'] = 'json'
-                        files = layout.get(return_type='file', **entities)
-                        if files:
-                            sourcejson = files[0]
-                        else:
-                            sourcejson = None
-                    else:
-                        # we will try with glob
-
-                        sourcefile = glob.glob(os.path.join(sessionBidsDir,GLOBSTRING + '.nii.gz'))
-                        if sourcefile:
-                            sourcefile = sourcefile[0]
-                        sourcejson = glob.glob(os.path.join(sessionBidsDir,GLOBSTRING + '.json'))
-                        if sourcejson:
-                            sourcejson = sourcejson[0]
+                for item in changeitems:
+                    located = locateBidsFile(item,bids_subject_label, bids_session_label,sessionBidsDir,  NOSESSION,layout)
+                    sourcefile=located["bidsfile"]
+                    sourcejson=located["bidsjson"]
 
                     try:
                         sidecarChanges = item["sidecarChanges"]
@@ -769,37 +835,77 @@ try:
                         sidecarChanges = []
                         logtext (LOGFILE, 'No sidecarChanges to process')
 
+
+                    # process IntendFor field as a special case, and then include all others
                     INTENDFILE = None
                     SIDECAR = {}
                     if sidecarChanges and sourcefile and sourcejson:
                         try:
                             IntendedFor = sidecarChanges["IntendedFor"]
-                            fileElements = IntendedFor.split("/")
-                            dataType = fileElements[0]
-                            
-                            intendEntities = {}
-                            intendEntities['extension']=['nii','nii.gz']
-                            intendEntities['datatype']=dataType
-                            intendEntities['subject']=bids_subject_label
-                            if not NOSESSION:
-                                intendEntities['session']=bids_session_label
-                            task=list(filter(lambda x: "task-" in x, fileElements))
-                            if task:
-                                taskValue=task[0].split('-')[1]
-                                intendEntities['task']=taskValue
-                            modality=list(filter(lambda x: "modality-" in x, fileElements))
-                            if modality:
-                                modalityValue=modality[0].split('-')[1]
-                                intendEntities['suffix']=modalityValue
-                            intendfiles = layout.get(return_type='file', **intendEntities)
-                            if intendfiles:
-                                INTENDFILE=intendfiles[0].split(sessionBidsDir + '/' + 'sub-' + intendEntities['subject'] + '/')[1]
+                            located = locateBidsFile(IntendedFor,bids_subject_label, bids_session_label, sessionBidsDir, NOSESSION,layout)
+                            intendfile=located["bidsfile"]
+
+                            if intendfile:
+                                INTENDFILE=intendfile.split(sessionBidsDir + '/' + 'sub-' + bids_subject_label + '/')[1]
                                 SIDECAR["IntendedFor"]=INTENDFILE
 
                         except KeyError:
-                            IntendedFor = None                        
+                            IntendedFor = None
 
-                    entities={}
+                    if sidecarChanges and sourcefile and sourcejson:
+                        for itemkey, itemvalue in sidecarChanges.items():
+                            if itemkey != "IntendedFor":
+                                SIDECAR[itemkey]=itemvalue
+
+                    if len(SIDECAR) > 0:
+                        with open(sourcejson,'r') as infile:
+                            sidecarjson = json.load(infile)
+                        for itemkey, itemvalue in SIDECAR.items():
+                            sidecarjson[itemkey]=itemvalue
+                        with open(sourcejson,'w') as outfile:
+                            json.dump(sidecarjson,outfile,indent=2)
+
+
+                # Perform COPY
+                try:
+                    copyitems = action['copy']
+                except KeyError:
+                    copyitems = []
+                    logtext (LOGFILE, 'No copy items provided.')
+
+                for item in copyitems:
+                    located = locateBidsFile(item,bids_subject_label, bids_session_label, sessionBidsDir, NOSESSION,layout)
+                    sourcefile=located["bidsfile"]
+                    sourcejson=located["bidsjson"]
+
+                    try:
+                        sidecarChanges = item["sidecarChanges"]
+                    except KeyError:
+                        sidecarChanges = []
+                        logtext (LOGFILE, 'No sidecarChanges to process')
+
+
+                    # process IntendFor field as a special case, and then include all others
+                    INTENDFILE = None
+                    SIDECAR = {}
+                    if sidecarChanges and sourcefile and sourcejson:
+                        try:
+                            IntendedFor = sidecarChanges["IntendedFor"]
+                            located = locateBidsFile(IntendedFor,bids_subject_label, bids_session_label, sessionBidsDir, NOSESSION,layout)
+                            intendfile=located["bidsfile"]
+
+                            if intendfile:
+                                INTENDFILE=intendfile.split(sessionBidsDir + '/' + 'sub-' + bids_subject_label + '/')[1]
+                                SIDECAR["IntendedFor"]=INTENDFILE
+
+                        except KeyError:
+                            IntendedFor = None
+
+                    if sidecarChanges and sourcefile and sourcejson:
+                        for itemkey, itemvalue in sidecarChanges.items():
+                            if itemkey != "IntendedFor":
+                                SIDECAR[itemkey]=itemvalue
+
                     try:
                         destination = item["destination"]
                     except KeyError:
@@ -807,85 +913,33 @@ try:
                         logtext (LOGFILE, 'No Destination provided for copy')
 
                     if destination and sourcefile and sourcejson:
-                        entities['subject']=bids_subject_label                            
-                        if not NOSESSION:
-                            entities['session']=bids_session_label
+                        located = locateBidsFile(destination,bids_subject_label, bids_session_label, sessionBidsDir, NOSESSION,layout,True)
+                        outputfile=located["bidsfile"]
+                        outputjson=located["bidsjson"]
 
-                        try:
-                            dataType = destination["dataType"]
-                            entities['datatype']=dataType
-                        except KeyError:
-                            dataType = None
+                        if outputfile and outputjson:
 
-                        try:
-                            modalityLabel = destination["modalityLabel"]
-                            entities['suffix']=modalityLabel
-                        except KeyError:
-                            modalityLabel = None
-
-                        try:
-                            fmapLabel = destination["fmap"]
-                            entities['fmap']=fmapLabel
-                        except KeyError:
-                            fmapLabel = None
-
-                        try:
-                            customLabels = destination["customLabels"]
-                            labels = customLabels.split("_")
-
-                            sessionbids=list(filter(lambda x: "ses-" in x, labels))
-                            if sessionbids:
-                                sessionValue=sessionbids[0].split('-')[1]
-                                entities['session']=sessionValue
-
-                            task=list(filter(lambda x: "task-" in x, labels))
-                            if task:
-                                taskValue=task[0].split('-')[1]
-                                entities['task']=taskValue
+                            if os.path.exists(sourcefile):
+                                logtext (LOGFILE, "copying %s to %s" %(sourcefile, outputfile))
+                                subprocess.check_output(['cp','-f',sourcefile,outputfile])
                             else:
-                                entities.pop('task', None)
+                                logtext (LOGFILE, "ERROR: %s cannot be found. Check bidsaction file logic." % sourcefile)
 
-                            acquisition=list(filter(lambda x: "acq-" in x, labels))
-                            if acquisition:
-                                acquisitionValue=acquisition[0].split('-')[1]
-                                entities['acquisition']=acquisitionValue
+                            if os.path.exists(sourcejson):
+                                logtext (LOGFILE, "copying %s to %s" %(sourcejson, outputjson))
+                                subprocess.check_output(['cp','-f',sourcejson, outputjson])
                             else:
-                                entities.pop('acquisition', None)
+                                logtext (LOGFILE, "ERROR: %s cannot be found. Check bidsaction file logic." % sourcejson)
 
-                            run=list(filter(lambda x: "run-" in x, labels))
-                            if run:
-                                runValue=run[0].split('-')[1]
-                                entities['run']=runValue
-                            else:
-                                entities.pop('run', None)
-                        except KeyError:
-                            customLabels= None
-
-                        entities['extension']='nii.gz'
-                        outputfile=os.path.join(sessionBidsDir, layout.build_path(entities))
-                        if os.path.exists(sourcefile):
-                            logtext (LOGFILE, "copying %s to %s" %(sourcefile, outputfile))
-                            subprocess.check_output(['cp',sourcefile,outputfile])
+                            if len(SIDECAR) > 0:
+                                with open(outputjson,'r') as infile:
+                                    sidecarjson = json.load(infile)
+                                for itemkey, itemvalue in SIDECAR.items():
+                                    sidecarjson[itemkey]=itemvalue
+                                with open(outputjson,'w') as outfile:
+                                    json.dump(sidecarjson,outfile,indent=2)
                         else:
-                            logtext (LOGFILE, "ERROR: %s cannot be found. Check bidsaction file logic." % sourcefile)
-
-
-                        entities['extension']='json'
-                        outputjson=os.path.join(sessionBidsDir, layout.build_path(entities))
-                        if os.path.exists(sourcejson):
-                            logtext (LOGFILE, "copying %s to %s" %(sourcejson, outputjson))
-                            subprocess.check_output(['cp',sourcejson, outputjson])
-                        else:
-                            logtext (LOGFILE, "ERROR: %s cannot be found. Check bidsaction file logic." % sourcejson)
-
-                        if len(SIDECAR) > 0:
-                            with open(outputjson,'r') as infile:
-                                sidecarjson = json.load(infile)
-                            for itemkey, itemvalue in SIDECAR.items():
-                                sidecarjson[itemkey]=itemvalue
-                            with open(outputjson,'w') as outfile:
-                                json.dump(sidecarjson,outfile,indent=2)
-
+                            logtext (LOGFILE,"Destination or source file could not be found - skipping")
 
                     else:
                         logtext (LOGFILE,"Destination or source file could not be found - skipping") 
@@ -931,7 +985,7 @@ try:
 
             logtext(LOGFILE, 'Uploading BIDS files for session %s to location %s' % (session,BIDS_RESOURCE_FOLDER))
             LOGFILE.flush()
-            subprocess.check_output(['cp',LOGFILENAME,sessionBidsDir])      
+            subprocess.check_output(['cp','-f',LOGFILENAME,sessionBidsDir])      
             uploadfiles (workflowId , "BIDS_NIFTI", "BIDS_FILES" ,"BIDS", sessionBidsDir, "/data/experiments/%s/resources/%s/files" % (session,BIDS_RESOURCE_FOLDER) ,host,sess,uploadByRef,args)
 
         else:
@@ -976,13 +1030,13 @@ try:
             entities={}
             entities['extension']=['nii','nii.gz']
             entities['datatype']='dwi'
-            dwifiles=layout.get(return_type='file', **entities)
+            dwifiles=layout.get(return_type='file', invalid_filters='allow', **entities)
             # run for each dwifile
             for dwi in dwifiles:
                 dwijson=layout.get_metadata(dwi)
                 dwi_entity = layout.parse_file_entities(dwi)
                 dwi_entity['extension']='json'
-                dwijsonfile=layout.get(return_type='file', **dwi_entity)[0]
+                dwijsonfile=layout.get(return_type='file', invalid_filters='allow',  **dwi_entity)[0]
 
                 bvec=layout.get_bvec(dwi)
                 bval=layout.get_bval(dwi)
@@ -992,7 +1046,7 @@ try:
                 rpe_entity = layout.parse_file_entities(rpe)
                 rpe_entity['extension']='json'
                 rpe_entity.pop("fmap")
-                rpejsonfile=layout.get(return_type='file', **rpe_entity)[0]
+                rpejsonfile=layout.get(return_type='file',invalid_filters='allow', **rpe_entity)[0]
 
                 dwiImage=nib.load(dwi)
                 rpeImage=nib.load(rpe)

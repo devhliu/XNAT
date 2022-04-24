@@ -15,6 +15,9 @@ from collections import OrderedDict
 import requests.packages.urllib3
 requests.packages.urllib3.disable_warnings()
 import datetime
+from datetime import date
+from bids import BIDSLayout
+import pandas as pd
 
 BIDSVERSION = "1.0.0"
 
@@ -154,7 +157,7 @@ def backupFolder(session,wfId,collectionFolder, backupLoc, log, logfilename,host
     TAGS=resourceInfo['file_tags']
     logtext(log, 'copying files for folder %s and session %s to location %s' % (collectionFolder, session, foldername))
     log.flush()
-    subprocess.check_output(['cp',logfilename,tempdir])
+    subprocess.check_output(['cp','-f',logfilename,tempdir])
     uploadfiles (wfId, FORMAT, CONTENT, TAGS, tempdir, "/data/experiments/%s/resources/%s/files" % (session, foldername),host,sess)
     rmtree(tempdir)
     return foldername
@@ -180,7 +183,7 @@ def backupProjectFolder(project,wfId,collectionFolder, backupLoc, log, logfilena
         TAGS=resourceInfo['file_tags']
         logtext(log, 'copying files for folder %s and project %s to location %s' % (collectionFolder, project, foldername))
         log.flush()
-        subprocess.check_output(['cp',logfilename,tempdir])
+        subprocess.check_output(['cp','-f',logfilename,tempdir])
         uploadfiles (wfId, FORMAT, CONTENT, TAGS, tempdir, "/data/projects/%s/resources/%s/files" % (project, foldername),host, sess)
         rmtree(tempdir)
         return foldername
@@ -617,11 +620,95 @@ def getBids(project, bidsDir, bidsFolder, host, sess,overwrite=True):
     loggingfiles = glob.glob(os.path.join(bidsDir,"*.log"))
     for loggingfile in loggingfiles:
         os.remove(loggingfile)
+    projname=getProjectName(sess, host, project)
+    createDatasetDescription(bidsDir, project,projname)
 
-    createDatasetDescription(bidsDir, project)
+    collateParticipantsTSV(project, bidsDir, bidsFolder, host,sess)
 
     return filesDownloaded
-   
+
+def collateParticipantsTSV(project, bidsDir, bidsFolder, host, sess):
+
+    tmploc=os.path.join(bidsDir,'collateParticipants')
+    filesdownloaded = downloadAllSessionfilesFiltered(bidsFolder,project,tmploc,True,host,sess,True,'participants.tsv',True,None,False, None)
+    participantsfiles=glob.glob(os.path.join(tmploc,'*','participants.tsv'))
+
+    participants={}
+    for partfile in participantsfiles:
+        session_id = partfile.split('/')[-2]
+        df = pd.read_csv(partfile,sep='\t')
+        participant_id = df['participant_id'].iloc[0]
+        gender_dcm = df['gender_dcm'].iloc[0]
+        age_dcm = df['age_dcm'].iloc[0]
+        # xnat values might have been updated - so lets get those again
+        xnat_data = getSubjectDemographics(None, sess,host, session_id)
+        gender_xnat = xnat_data["gender_xnat"]
+        age_xnat = xnat_data["age_xnat"]
+        if participant_id not in participants:
+            participants[participant_id]={'gender_dcm':gender_dcm, 'gender_xnat':gender_xnat, 'age_dcm':age_dcm, 'age_xnat': age_xnat}
+
+    # create participants tsv file - we overwrite the one created by heudiconv
+    participantsTSV=os.path.join(bidsDir,'participants.tsv')
+    table_columns=['participant_id','gender_dcm', 'gender_xnat', 'age_dcm', 'age_xnat', 'group']
+    table_data=[]
+    for sortkey in sorted(participants.keys()):
+        participant_id=sortkey
+        gender_dcm=participants[participant_id]["gender_dcm"]
+        gender_xnat=participants[participant_id]["gender_xnat"]
+        age_dcm=participants[participant_id]["age_dcm"]
+        age_xnat=participants[participant_id]["age_xnat"]
+        group = 'Control'
+        table_data.append([participant_id, gender_dcm, gender_xnat, age_dcm, age_xnat, group ])
+        
+    df = pd.DataFrame(table_data, columns=table_columns)
+    df.to_csv(participantsTSV,sep="\t", index=False)
+
+    if os.path.exists(tmploc):
+        rmtree(tmploc)
+
+
+def getSubjectDemographics(subject, sess, host, session=None):
+    # get xnat demographics
+    SUBJECT_DEMOGRAPHICS={}
+
+    if subject is None:
+        if session is None:
+            return SUBJECT_DEMOGRAPHICS
+        else:
+            subject=get(sess, host + "/data/experiments/%s" % session, params={"format": "json", "handler": "values", "columns": "subject_ID"}).json()["ResultSet"]["Result"][0]['subject_ID']
+
+    results=get(sess, host + "/data/subjects/%s" % subject, params={"format": "json"})
+    SUBJECT_DEMOGRAPHICS["gender_xnat"]=""
+    try:
+        gender_xnat=results.json()['items'][0]['children'][0]['items'][0]['data_fields']['gender']
+        SUBJECT_DEMOGRAPHICS["gender_xnat"]=gender_xnat
+    except KeyError:
+        pass
+
+    SUBJECT_DEMOGRAPHICS["age_xnat"]=""
+    try:
+        age_xnat=results.json()['items'][0]['children'][0]['items'][0]['data_fields']['age']
+        SUBJECT_DEMOGRAPHICS["age_xnat"]=age_xnat
+    except KeyError:
+        pass
+
+    try:
+        dob_xnat=results.json()['items'][0]['children'][0]['items'][0]['data_fields']['dob']
+        agedate_xnat=datetime.datetime.strptime(dob_xnat,"%Y-%m-%d")
+        age_xnat=getAge(agedate_xnat)
+        SUBJECT_DEMOGRAPHICS["age_xnat"]=age_xnat
+    except KeyError:
+        pass
+
+    try:
+        yob_xnat=results.json()['items'][0]['children'][0]['items'][0]['data_fields']['yob']
+        agedate_xnat=datetime.datetime.strptime(str(yob_xnat),"%Y")
+        age_xnat=getAge(agedate_xnat)
+        SUBJECT_DEMOGRAPHICS["age_xnat"]=age_xnat
+    except KeyError:
+        pass 
+
+    return SUBJECT_DEMOGRAPHICS  
 
 # copy down the BIDS files for just this session
 def bidsprepare( project, session,bidsDir, bidsFolder, host,sess, overwrite=True):
@@ -632,19 +719,40 @@ def bidsprepare( project, session,bidsDir, bidsFolder, host,sess, overwrite=True
     if not os.listdir(bidsDir) or overwrite:
         filesDownloaded= downloadSessionfiles (bidsFolder, session, bidsDir, True, host,sess)
     #remove all log files
-    createDatasetDescription(bidsDir, project)
+    loggingfiles = glob.glob(os.path.join(bidsDir,"*.log"))
+    for loggingfile in loggingfiles:
+        os.remove(loggingfile)
 
-def createDatasetDescription(bidsDir, proj):
+    projname=getProjectName(sess, host, project)
+    createDatasetDescription(bidsDir, project, projname)
+
+def createDatasetDescription(bidsDir, proj, projname=None):
     datasetjson=os.path.join(bidsDir,'dataset_description.json')
     if not os.path.exists(datasetjson):
         print("Constructing BIDS dataset description")
         dataset_description=OrderedDict()
-        dataset_description['Name'] =proj
+        if projname:
+            dataset_description['Name'] =projname
+        else:
+            dataset_description['Name'] =proj            
+        dataset_description['XNATProject'] =proj
         dataset_description['BIDSVersion']=BIDSVERSION
         dataset_description['License']=""
         dataset_description['ReferencesAndLinks']=""
-        with open(datasetjson,'w') as datasetjson:
-             json.dump(dataset_description,datasetjson)
+        with open(datasetjson,'w') as outfile:
+             json.dump(dataset_description,outfile,indent=2)
+    else:
+        # add XNATProject ID
+        with open(datasetjson,'r') as infile:
+             dataset_description=json.load(infile)
+        if projname:
+            dataset_description['Name'] =projname
+        else:
+            dataset_description['Name'] =proj  
+        dataset_description['XNATProject'] =proj
+        with open(datasetjson,'w') as outfile:
+             json.dump(dataset_description,outfile,indent=2)
+
 
 def get(sess,url, **kwargs):
     try:
@@ -724,6 +832,12 @@ def startSession(user,password):
     sess.auth = (user, password)
     return sess
 
+def getProjectName(sess, host, proj):
+    results = get(sess, host + "/data/projects/%s" % proj, params={"format": "json"})
+    projectName = results.json()["items"][0]["data_fields"]['name']
+
+    return projectName
+
 def getProjectFromSession(sess, session, host):
     r = get(sess, host + "/data/experiments/%s" % session, params={"format": "json", "handler": "values", "columns": "project"})
     sessionValuesJson = r.json()["ResultSet"]["Result"][0]
@@ -752,3 +866,167 @@ def getSessionLabel(sess, session,host):
     sessionValuesJson = r.json()["ResultSet"]["Result"][0]
     session_label = sessionValuesJson["label"]
     return session_label
+
+
+def locateBidsFile(item,bids_subject_label, bids_session_label, sessionBidsDir, NOSESSION,layout,buildpath=False ):
+    globdict={}
+    globdict["subject"]=""
+    globdict["session"]=""
+    globdict["datatype"]=""
+    globdict["suffix"]=""
+    globdict["custom"]=""
+
+    entities={}
+    entities['extension']=['nii','nii.gz']
+    entities['subject']=bids_subject_label
+
+    if not NOSESSION:
+        entities['session']=bids_session_label
+
+    try:
+        customLabels = item["customLabels"]
+        labels = customLabels.split("_")
+
+        subjectbids=list(filter(lambda x: "sub-" in x, labels))
+        if subjectbids:
+            subjectValue=subjectbids[0].split('-')[1]
+            entities['subject']=subjectValue
+        else:
+            entities['subject']=bids_subject_label
+
+        globdict["subject"]='sub-'+ entities['subject']
+
+        sessionbids=list(filter(lambda x: "ses-" in x, labels))
+        if sessionbids:
+            sessionValue=sessionbids[0].split('-')[1]
+            entities['session']=sessionValue
+            globdict["session"]='ses-'+ entities['session']
+            
+        elif not NOSESSION:
+            entities['session']=bids_session_label
+            globdict["session"]='ses-'+ entities['session']
+
+        task=list(filter(lambda x: "task-" in x, labels))
+        if task:
+            taskValue=task[0].split('-')[1]
+            entities['task']=taskValue
+
+        acquisition=list(filter(lambda x: "acq-" in x, labels))
+        if acquisition:
+            acquisitionValue=acquisition[0].split('-')[1]
+            entities['acquisition']=acquisitionValue
+
+        run=list(filter(lambda x: "run-" in x, labels))
+        if run:
+            runValue=run[0].split('-')[1]
+            entities['run']=runValue
+
+        echo=list(filter(lambda x: "echo-" in x, labels))
+        if echo:
+            echoValue=echo[0].split('-')[1]
+            entities['echo']=echoValue
+
+        part=list(filter(lambda x: "part-" in x, labels))
+        if part:
+            partValue=part[0].split('-')[1]
+            entities['part']=partValue
+
+        rec=list(filter(lambda x: "rec-" in x, labels))
+        if rec:
+            recValue=rec[0].split('-')[1]
+            entities['reconstruction']=recValue
+
+    except KeyError:
+        customLabels= None
+        entities['subject']=bids_subject_label
+        globdict["subject"]='sub-'+ bids_subject_label
+        if not NOSESSION:
+            entities['session']=bids_session_label
+            globdict["session"]='ses-'+ bids_session_label
+
+    try:
+        dataType = item["dataType"]
+        entities['datatype']=dataType
+        globdict["datatype"]=entities['datatype']
+    except KeyError:
+        dataType = None
+
+    try:
+        modalityLabel = item["modalityLabel"]
+        entities['suffix']=modalityLabel
+        globdict["suffix"]=entities['suffix']+"*"
+
+    except KeyError:
+        modalityLabel = None
+
+    try:
+        fmap = item["fmap"]
+        entities['fmap']=fmap
+        globdict["datatype"]='fmap'
+        globdict["suffix"]=entities['fmap']+"*"
+    except KeyError:
+        fmap=None
+
+
+    if customLabels:
+        globdict["custom"]="*"+customLabels+"*"
+    else:
+        globdict["custom"]="*"
+
+    GLOBSTRING=os.path.join(globdict["subject"],globdict["session"], globdict["datatype"],globdict["custom"]+globdict["suffix"] )
+
+    if not buildpath:
+        files = layout.get(return_type='file', invalid_filters='allow', **entities)
+        if files:
+            sourcefile = files[0]
+            entities['extension'] = 'json'
+            files = layout.get(return_type='file', invalid_filters='allow', **entities)
+            if files:
+                sourcejson = files[0]
+            else:
+                sourcejson = glob.glob(os.path.join(sessionBidsDir,GLOBSTRING + '.json'))
+                if sourcejson:
+                    sourcejson = sourcejson[0]
+        else:
+            # we will try with exact, then if doesn't work wih glob
+            filestem = globdict["subject"] + '_' + globdict["session"] + '_' + globdict["custom"].replace("*",'') +'_' +globdict["suffix"].replace("*",'') 
+            filestem=filestem.replace('__','_')
+            sourcefile = os.path.join(sessionBidsDir,globdict["subject"],globdict["session"], globdict["datatype"],filestem + '.nii.gz')
+            if not os.path.exists(sourcefile):
+                sourcefile = glob.glob(os.path.join(sessionBidsDir,GLOBSTRING + '.nii.gz'))
+                if sourcefile:
+                    sourcefile = sourcefile[0]
+
+            sourcejson = os.path.join(sessionBidsDir, globdict["subject"],globdict["session"], globdict["datatype"],filestem + '.json')
+            if not os.path.exists(sourcejson):
+                sourcejson = glob.glob(os.path.join(sessionBidsDir,GLOBSTRING + '.json'))
+                if sourcejson:
+                    sourcejson = sourcejson[0]
+
+        targetdict={}
+        targetdict["bidsfile"]=sourcefile
+        targetdict["bidsjson"]=sourcejson
+
+    else:
+        try:
+            entities['extension']='nii.gz'
+            outputfile=os.path.join(sessionBidsDir, layout.build_path(entities))
+
+            entities['extension']='json'
+            outputjson=os.path.join(sessionBidsDir, layout.build_path(entities))
+        except ValueError:
+            outputfile = os.path.join(globdict["subject"],globdict["session"], globdict["datatype"],globdict["subject"] + '_' + globdict["session"] + '_' + globdict["custom"].replace("*",'') +'_' +globdict["suffix"].replace("*",'') + '.nii.gz')
+            outputjson = os.path.join(globdict["subject"],globdict["session"], globdict["datatype"],globdict["subject"] + '_' + globdict["session"] + '_' + globdict["custom"].replace("*",'') +'_' +globdict["suffix"].replace("*",'') + '.json')
+
+        targetdict={}
+        targetdict["bidsfile"]=outputfile
+        targetdict["bidsjson"]=outputjson
+
+
+    return targetdict
+
+
+def getAge(birthdate):
+    today = date.today()
+    age = today.year - birthdate.year - ((today.month, today.day) < (birthdate.month, birthdate.day))
+    return age

@@ -7,7 +7,7 @@ def get_parser():
     from argparse import ArgumentParser
     from argparse import RawTextHelpFormatter
     parser = ArgumentParser(description="upload resource sto XNAT")
-    parser.add_argument("command", default="downloadSession", help="downloadSession, downloadAllSessions, downloadSubject. downloadSubjectSessions, downloadProject, downloadSessionDicomZip")
+    parser.add_argument("command", default="downloadSession", help="downloadSession, downloadAllSessions, getBids, downloadSubject. downloadSubjectSessions, downloadProject, downloadSessionDicomZip")
     parser.add_argument("xnatfolder", default="DEFAULT-ORBISYS", help="collection name")
     parser.add_argument("outputdir", default="./", help="output directory")
     parser.add_argument("--host", default="https://cnda.wustl.edu", help="CNDA host", required=True)
@@ -67,6 +67,13 @@ def main():
             print("Cannot download all sessions without a valid project label. Please specify project with --project")
         else:
             filedown = downloadAllSessionfiles (xnatfolder, project, outputdir, True, host, connection, separate) 
+
+    elif command == 'getBids':
+        if project is None:
+            print("Cannot download bids without a valid project label. Please specify project with --project")
+        else:
+            filedown = getBids(project, outputdir, xnatfolder, host, connection)
+
 
     elif command == 'downloadSubject':
         if subject is None or project is None:
