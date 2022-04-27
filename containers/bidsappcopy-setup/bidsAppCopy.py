@@ -15,7 +15,7 @@ Options:
                         This is a BIDS-ORBISYS Resource file
     <outputDir>         Directory in which BIDS formatted files should be written.
 """
-from xnatutils.genutils import *
+from xnatutils.genutilsDowngrade import *
 from shutil import copytree
 import argparse
 import json
@@ -36,18 +36,25 @@ parser.add_argument("outputDir", help="output directory")
 parser.add_argument("--host", help="CNDA host", required=False)
 parser.add_argument("--user", help="CNDA username", required=False)
 parser.add_argument("--password", help="Password", required=False)
+parser.add_argument("--cleandefaced", help="remove defaced T1w", required=False,default="N") 
 
 args, unknown_args = parser.parse_known_args()
 
 # if host not passed then we grab from environment
 if args.host is None:
     host = os.getenv("XNAT_HOST")
+else:
+    host = args.host
 
 if args.user is None:
     user = os.getenv("XNAT_USER")
+else:
+    user = args.user
 
 if args.password is None:
     password = os.getenv("XNAT_PASS")
+else:
+    password = args.password
 
 host = cleanServer(host)
 print("XNAT host is {}".format(host))
@@ -57,6 +64,8 @@ outputDir=args.outputDir
 
 print("Input dir: {}".format(inputDir))
 print("Output dir: {}".format(outputDir))
+
+CLEANDEFACED=isTrue(args.cleandefaced)
 
 # obtain BIDS data
 print("Copying BIDS data.")
@@ -69,13 +78,18 @@ copytree(bidsfiles[0],outputfiles)
 
 
 # delete deface anats
-defaceanats=glob.glob(os.path.join(outputfiles,'anat','*deface*.*'))
-for file in defaceanats:
-    os.system("rm {}".format(file))
+if CLEANDEFACED:
+    T1w=glob.glob(os.path.join(outputfiles,'anat','*T1w*.*'))
+    defaceanats=glob.glob(os.path.join(outputfiles,'anat','*deface.*'))
+    if len(T1w) > len(defaceanats):
+        for file in defaceanats:
+            os.system("rm {}".format(file))
 
-defaceanats=glob.glob(os.path.join(outputfiles,'ses*','anat','*deface*.*'))
-for file in defaceanats:
-    os.system("rm {}".format(file))
+    T1w=glob.glob(os.path.join(outputfiles,'ses*','anat','*T1w*.*'))            
+    defaceanats=glob.glob(os.path.join(outputfiles,'ses*','anat','*deface*.*'))
+    if len(T1w) > len(defaceanats):
+        for file in defaceanats:
+            os.system("rm {}".format(file))
 
 
 # copy datadescription
