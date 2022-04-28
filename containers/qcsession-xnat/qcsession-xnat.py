@@ -1106,7 +1106,7 @@ try:
                         os.mkdir(scratchdir)
 
                 preprocdwimif=dwimif.split('.mif')[0] + "_all_preproc.mif"
-                eddy_command='dwifslpreproc {} {} -scratch {} -eddy_slspec {} -eddyqc_all {} -nocleanup -rpe_header -eddy_options " --slm=linear --repol --cnr_maps --ol_type=both --niter=8 --fwhm=10,6,4,2,0,0,0,0 --mporder=8 --s2v_niter=8"'.format(alldwimif,preprocdwimif,scratchdir,slspec,eddyQCOutdir )
+                eddy_command='dwifslpreproc {} {} -scratch {} -eddy_slspec {} -eddyqc_all {} -nocleanup -rpe_header -eddy_options " --slm=linear --repol --cnr_maps --ol_type=both --niter=8 --fwhm=10,6,4,2,0,0,0,0 --mporder=8 --s2v_niter=8 --data_is_shelled"'.format(alldwimif,preprocdwimif,scratchdir,slspec,eddyQCOutdir )
 
                 print ('Running eddy for session %s: \n%s' % (session, eddy_command))
                 os.system(eddy_command)

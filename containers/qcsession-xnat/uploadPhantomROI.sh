@@ -8,7 +8,7 @@ labels="--labels PHANTOM_ROI,PHANTOM_ROI_FILES,ROI"
 host="--host https://aacazxnat.arizona.edu"
 overwrite="--overwrite True"
 
-project="--project U19_PILOT"
+project="--project UA_MRI"
 extDir="/mnt/PhantomROI"
 DEBUG="-m pdb"
 DEBUG=""
