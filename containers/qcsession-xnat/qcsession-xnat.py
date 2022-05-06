@@ -8,6 +8,7 @@ from pydicom import dcmread
 import nibabel as nib
 import numpy as np
 import argparse
+import stat
 
 BIDSVERSION = "1.0.0"
 
@@ -862,6 +863,9 @@ try:
                             sidecarjson = json.load(infile)
                         for itemkey, itemvalue in SIDECAR.items():
                             sidecarjson[itemkey]=itemvalue
+
+                        # annoyingly heudiconv saves json file without write permissions - aarghh!
+                        os.chmod(sourcejson, stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH)
                         with open(sourcejson,'w') as outfile:
                             json.dump(sidecarjson,outfile,indent=2)
 
