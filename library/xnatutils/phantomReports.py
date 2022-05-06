@@ -12,6 +12,9 @@ import itertools
 import os
 from nilearn import plotting
 
+FORMATRECS=5
+XLABELROT=30
+
 def create_document(title, stylesheet=None, script=None):
     doc = dominate.document(title = title)
     if stylesheet is not None:
@@ -266,11 +269,13 @@ def createSNRSection(doc,reportdict,modality,imagedir,reportcurr=None):
     plot_df = new_df.sort_values(by=['date'])
     plot_df.reset_index(drop=True, inplace=True)
 
-    sns.relplot(
+    aspx=int(np.ceil(len(plot_df)/FORMATRECS))
+    ax = sns.relplot(
         data=plot_df, kind="line",
-        x="date", y="snr", col="roi", marker="o",
+        x="date", y="snr", col="roi", marker="o", aspect=aspx,
         facet_kws=dict(sharex=False),
     )
+    ax.set_xticklabels(rotation=XLABELROT)
 
     if modality == "structural":
         snrimage=os.path.join(imagedir,"struct_snr.png")
@@ -295,11 +300,13 @@ def createSNRGroupSection(doc,reportdict,modality,imagedir,reportcurr=None):
     for name, group in grouped:
         group.reset_index(drop=True, inplace=True)
 
-        sns.relplot(
+        aspx=int(np.ceil(len(group)/FORMATRECS))
+        ax = sns.relplot(
             data=group, kind="line",
-            x="date", y="snr", col="roi", marker="o",
+            x="date", y="snr", col="roi", marker="o",aspect=aspx,
             facet_kws=dict(sharex=False),
         )
+        ax.set_xticklabels(rotation=XLABELROT)
 
         if modality == "structural":
             snrimage=os.path.join(imagedir,"struct_snr_{}.png".format(name))
@@ -341,11 +348,13 @@ def createGeometrySection(doc,reportdict,modality,imagedir):
     plot_df = new_df_index.sort_values(by=['date'])
     plot_df.reset_index(drop=True, inplace=True)
 
-    sns.relplot(
+    aspx=int(np.ceil(len(plot_df)/FORMATRECS))
+    ax = sns.relplot(
         data=plot_df, kind="line",
-        x="date", y="average_values", col="field",  marker="o",
+        x="date", y="average_values", col="field",  marker="o", aspect=aspx,
         facet_kws=dict(sharex=False),
-    )  
+    )
+    ax.set_xticklabels(rotation=XLABELROT)  
 
     geomimage=os.path.join(imagedir,"struct_geom.png")
     plt.savefig(geomimage)
@@ -373,11 +382,14 @@ def createGeometryGroupSection(doc,reportdict,modality,imagedir):
     grouped=plot_df.groupby(['field'])
     for name, group in grouped:
         group.reset_index(drop=True, inplace=True)
-        sns.relplot(
+
+        aspx=int(np.ceil(len(group)/FORMATRECS))
+        ax = sns.relplot(
             data=group, kind="line",
-            x="date", y="average_values", col="field",  marker="o",
+            x="date", y="average_values", col="field",  marker="o",aspect=aspx,
             facet_kws=dict(sharex=False),
-        )  
+        )
+        ax.set_xticklabels(rotation=XLABELROT)  
 
         geomimage=os.path.join(imagedir,"struct_group_geom_{}.png".format(name))
         plt.savefig(geomimage)
@@ -437,12 +449,15 @@ def createTSNRSection(doc,reportdict,modality,imagedir, reportcurr=None):
 
     plot_df = new_df.sort_values(by=['date'])
     plot_df.reset_index(drop=True, inplace=True)
-  
-    sns.relplot(
+
+    aspx=int(np.ceil(len(plot_df)/FORMATRECS))
+    ax = sns.relplot(
         data=plot_df, kind="line",
-        x="date", y="tsnr_in_roi", col="roi", marker="o",
+        x="date", y="tsnr_in_roi", col="roi", marker="o", aspect=aspx,
         facet_kws=dict(sharex=False),
     )
+    ax.set_xticklabels(rotation=XLABELROT)
+
 
     tsnrimage=os.path.join(imagedir,"func_tsnr.png")
     plt.savefig(tsnrimage)    
@@ -466,11 +481,13 @@ def createTSNRGroupSection(doc,reportdict,modality,imagedir):
     for name, group in grouped:
         group.reset_index(drop=True, inplace=True)
 
-        sns.relplot(
+        aspx=int(np.ceil(len(group)/FORMATRECS))
+        ax = sns.relplot(
             data=group, kind="line",
-            x="date", y="tsnr_in_roi", col="roi", marker="o",
+            x="date", y="tsnr_in_roi", col="roi", marker="o",aspect=aspx,
             facet_kws=dict(sharex=False),
         )
+        ax.set_xticklabels(rotation=XLABELROT)
 
         tsnrimage=os.path.join(imagedir,"func_group_tsnr_{}.png".format(name))
         plt.savefig(tsnrimage)    
